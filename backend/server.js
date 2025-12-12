@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { exec } = require("child_process");
+const { exec, spawn } = require("child_process");
 const { promisify } = require("util");
 
 const execAsync = promisify(exec);
@@ -29,9 +29,49 @@ app.post("/api/import", async (req, res) => {
 
     const command = `npm start -- --profile=${profile} --dry-run`;
 
-    const { stdout, stderr } = await execAsync(command, {
-      cwd: CLI_DIR,
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+    // Use spawn with timeout to be able to kill the process
+    const { stdout, stderr } = await new Promise((resolve, reject) => {
+      const process = spawn("npm", ["start", "--", `--profile=${profile}`, "--dry-run"], {
+        cwd: CLI_DIR,
+        shell: true,
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      process.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      process.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      const timeout = setTimeout(() => {
+        process.kill("SIGTERM");
+        reject(
+          new Error(
+            "Command timeout: CLI execution took too long (30s). The CLI may be waiting for user interaction (e.g., BankID authentication)."
+          )
+        );
+      }, 30000); // 30 second timeout
+
+      process.on("close", (code) => {
+        clearTimeout(timeout);
+        if (code === 0) {
+          resolve({ stdout, stderr });
+        } else {
+          const error = new Error(stderr || `Process exited with code ${code}`);
+          error.stdout = stdout;
+          error.stderr = stderr;
+          reject(error);
+        }
+      });
+
+      process.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
     });
 
     res.json({
