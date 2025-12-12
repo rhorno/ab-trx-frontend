@@ -1,0 +1,178 @@
+---
+description: Best practices for creating and maintaining AGENTS.md files based on industry standards and research. Use when creating or updating AGENTS.md files in any project.
+globs:
+  - "**/AGENTS.md"
+alwaysApply: false
+---
+
+# AGENTS.md Best Practices
+
+Authoritative guide for creating effective `AGENTS.md` files that provide clear, actionable instructions for AI coding agents.
+
+## Purpose
+
+`AGENTS.md` serves as a dedicated guide for AI coding agents, complementing human-focused `README.md` files. It provides specific instructions, build commands, testing procedures, code conventions, and safety boundaries tailored for automated agents.
+
+**Key Principle:** Keep it concise (≤150 lines) and focused on what agents need to know, linking to detailed documentation rather than duplicating it.
+
+## Core Components
+
+### 1. Project Overview
+- Brief description of the project and its purpose
+- Key technologies and frameworks
+- Project structure overview (especially for monorepos)
+
+### 2. Development Commands
+- **Setup:** Environment requirements and installation steps
+- **Development:** Commands to start dev server
+- **Build:** Production build commands
+- **Testing:** Test execution commands (unit, integration, E2E)
+- **Linting/Formatting:** Code quality commands
+- **Use concrete commands** wrapped in backticks to prevent ambiguity
+
+### 3. Code Style Guidelines
+- Link to detailed style guides rather than duplicating
+- Reference linting/formatting tools (ESLint, Prettier, etc.)
+- Key conventions (naming, structure, patterns)
+
+### 4. Testing Instructions
+- Testing frameworks and tools
+- How to run tests
+- Test coverage expectations
+- Testing patterns and best practices
+
+### 5. Project Structure
+- Key directories and their purposes
+- Folder boundaries and import rules
+- Architecture patterns
+
+### 6. Safety Boundaries
+- Actions agents can perform autonomously
+- Actions requiring explicit permission
+- Non-destructive operation guidelines
+- Tool usage preferences
+
+### 7. Reference Documentation
+- Links to detailed documentation (Code of Conduct, style guides, etc.)
+- Workspace rules and standards
+- External resources
+
+## Best Practices
+
+### Conciseness
+- **Target:** ≤150 lines total
+- Remove verbose explanations; link to detailed docs instead
+- Use bullet points and short sentences
+- Avoid duplicating information from other documentation
+
+### Clarity
+- Use explicit commands wrapped in backticks: `` `npm run test` ``
+- Provide concrete examples, not abstract descriptions
+- Use clear section headings
+- Prioritize actionable information
+
+### Maintainability
+- Treat as living documentation—update alongside code changes
+- Link to existing documentation rather than duplicating content
+- Keep build/test commands current
+- Review and update when workflows change
+
+### Structure
+- **Single-project repos:** Place `AGENTS.md` at repository root
+- **Monorepos:** Place `AGENTS.md` in each subdirectory/package for context-specific guidance
+- Agents prioritize the nearest `AGENTS.md` file relative to their operation
+
+### Safety and Permissions
+- Clearly define what agents can do autonomously
+- Specify actions requiring human approval
+- Document non-destructive operation preferences
+- Define tool usage guidelines (repository-aware tools vs. shell commands)
+
+## Content Guidelines
+
+### Do Include
+- ✅ Essential build/test/lint commands
+- ✅ Project-specific guardrails and constraints
+- ✅ Links to authoritative documentation
+- ✅ Safety boundaries and permission rules
+- ✅ Quick reference for common tasks
+
+### Don't Include
+- ❌ Detailed implementation explanations (link instead)
+- ❌ Verbose configuration examples (link to docs)
+- ❌ Duplicate content from README.md or other docs
+- ❌ Historical context or background information
+- ❌ Step-by-step tutorials (link to guides)
+
+## Example Structure
+
+```markdown
+# AGENTS
+
+Authoritative guide for automated agents working in [project-name].
+
+## Sources
+- [Primary documentation links]
+
+## Scope
+- What this applies to
+
+## Non-Negotiable Guardrails
+- Critical rules that must be followed
+
+## Pre-Change Checklist
+- Steps to take before making changes
+
+## Development Commands
+- Setup, build, test, lint commands
+
+## Reference Documentation
+- Links to detailed guides
+
+## Implementation Rules
+- Code patterns and practices
+
+## Testing Rules
+- Testing framework and patterns
+
+## Safety Boundaries
+- Permission and tool usage guidelines
+
+## Dependency Rules
+- Package management guidelines
+
+## When In Doubt
+- Escalation procedures
+```
+
+## Monorepo Considerations
+
+For monorepos or multi-package projects:
+
+1. **Root-level `AGENTS.md`:** General project guidance
+2. **Package-level `AGENTS.md`:** Context-specific instructions for each package
+3. **Agent behavior:** Agents use the nearest `AGENTS.md` file relative to their current operation
+4. **Consistency:** Maintain consistent structure across all `AGENTS.md` files
+
+## Maintenance
+
+- **Update frequency:** Whenever build steps, test commands, or conventions change
+- **Review cycle:** Periodically review for accuracy and relevance
+- **Version alignment:** Ensure commands match current package.json/configuration
+- **Link validation:** Verify all linked documentation still exists and is current
+
+## Research Sources
+
+This guide is based on best practices from:
+- [AGENTS.md official documentation](https://agents.md/)
+- [AGENTS.md Best Practices](https://agentsmd.io/agents-md-best-practices)
+- Industry standards for AI agent documentation
+- Write the Docs documentation principles
+
+## Key Takeaways
+
+1. **Conciseness is critical:** ≤150 lines target
+2. **Link, don't duplicate:** Reference detailed docs instead of copying
+3. **Be specific:** Use concrete commands and examples
+4. **Define boundaries:** Clearly state what agents can/cannot do
+5. **Keep it current:** Update alongside code changes
