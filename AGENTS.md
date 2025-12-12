@@ -71,8 +71,10 @@ cd frontend && npm run lint
 
 ## Testing Rules
 - No test framework configured yet (POC phase)
-- Manual testing via browser and API endpoints
-- Health check: `GET http://localhost:8000/api/health`
+- **Use browser tools to test the frontend application** after making changes
+- Navigate to `http://localhost:5173` when frontend dev server is running
+- Test API endpoints: Health check `GET http://localhost:8000/api/health`
+- Verify UI interactions, API calls, and error handling through browser testing
 
 ## Safety Boundaries
 - **Autonomous actions:**
