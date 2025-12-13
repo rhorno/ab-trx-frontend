@@ -27,6 +27,7 @@ export interface AuthStatus {
   status: "pending" | "authenticated" | "failed" | "expired";
   message?: string;
   timestamp?: string;
+  qrCode?: QRCodeData; // POC: Include QR code data in status for streaming
 }
 
 /**

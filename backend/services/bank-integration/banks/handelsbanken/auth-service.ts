@@ -11,6 +11,14 @@ export class AuthService {
   private readonly verbose: boolean;
   private qrStartToken: string | null = null;
   private logger: Logger;
+  private serviceRef: any = null; // POC: Reference to service for QR code notifications
+
+  /**
+   * POC: Set service reference for QR code notifications
+   */
+  setServiceRef(service: any): void {
+    this.serviceRef = service;
+  }
 
   /**
    * Creates a new authentication service
@@ -311,6 +319,11 @@ export class AuthService {
         `Successfully obtained QR token: ${qrStartToken.substring(0, 10)}...`
       );
       await renderQrToken(qrStartToken);
+
+      // POC: Notify service layer of QR code
+      if (this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
+        this.serviceRef.setQrToken(qrStartToken);
+      }
     } else {
       // Could not find the QR token, inform the user
       this.log("Could not find QR code token automatically.");
@@ -843,6 +856,13 @@ export class AuthService {
         const token = this.qrStartToken;
         // Always render the QR code when found
         await renderQrToken(token);
+        // POC: Notify service layer
+        if (
+          this.serviceRef &&
+          typeof this.serviceRef.setQrToken === "function"
+        ) {
+          this.serviceRef.setQrToken(token);
+        }
         return token;
       }
 
@@ -854,6 +874,13 @@ export class AuthService {
         );
         // Always render the QR code when found
         await renderQrToken(extractedToken);
+        // POC: Notify service layer
+        if (
+          this.serviceRef &&
+          typeof this.serviceRef.setQrToken === "function"
+        ) {
+          this.serviceRef.setQrToken(extractedToken);
+        }
         return extractedToken;
       }
 

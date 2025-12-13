@@ -20,6 +20,7 @@ export default class HandelsbankenClient extends BankClient {
   private authService: AuthService | null = null;
   private apiService: HandelsbankenApiService | null = null;
   private pageExtractor: PageExtractor | null = null;
+  private serviceRef: any = null; // POC: Reference to service for QR code notifications
 
   /**
    * Create a new HandelsbankenClient
@@ -31,12 +32,25 @@ export default class HandelsbankenClient extends BankClient {
   }
 
   /**
+   * POC: Set service reference for QR code notifications
+   * Minimal change to support service layer
+   */
+  setServiceRef(service: any): void {
+    this.serviceRef = service;
+  }
+
+  /**
    * Initialize services
    */
   private initServices(page: Page): void {
     this.authService = new AuthService(page, this.verbose);
     this.apiService = new HandelsbankenApiService(page, this.verbose);
     this.pageExtractor = new PageExtractor(page, this.verbose);
+
+    // POC: Pass service ref to auth service for QR code notifications
+    if (this.serviceRef && this.authService.setServiceRef) {
+      this.authService.setServiceRef(this.serviceRef);
+    }
   }
 
   /**
