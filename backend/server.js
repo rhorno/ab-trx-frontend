@@ -16,77 +16,101 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-app.post("/api/import", async (req, res) => {
-  try {
-    const { profile } = req.body;
+// Store active processes to allow cleanup
+const activeProcesses = new Map();
 
-    if (!profile || typeof profile !== "string" || profile.trim() === "") {
-      return res.status(400).json({
-        success: false,
-        error: "Profile is required",
-      });
-    }
+// SSE endpoint for streaming import
+app.get("/api/import", (req, res) => {
+  const { profile } = req.query;
 
-    const command = `npm start -- --profile=${profile} --dry-run`;
-
-    // Use spawn with timeout to be able to kill the process
-    const { stdout, stderr } = await new Promise((resolve, reject) => {
-      const process = spawn("npm", ["start", "--", `--profile=${profile}`, "--dry-run"], {
-        cwd: CLI_DIR,
-        shell: true,
-      });
-
-      let stdout = "";
-      let stderr = "";
-
-      process.stdout.on("data", (data) => {
-        stdout += data.toString();
-      });
-
-      process.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      const timeout = setTimeout(() => {
-        process.kill("SIGTERM");
-        reject(
-          new Error(
-            "Command timeout: CLI execution took too long (30s). The CLI may be waiting for user interaction (e.g., BankID authentication)."
-          )
-        );
-      }, 30000); // 30 second timeout
-
-      process.on("close", (code) => {
-        clearTimeout(timeout);
-        if (code === 0) {
-          resolve({ stdout, stderr });
-        } else {
-          const error = new Error(stderr || `Process exited with code ${code}`);
-          error.stdout = stdout;
-          error.stderr = stderr;
-          reject(error);
-        }
-      });
-
-      process.on("error", (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-    });
-
-    res.json({
-      success: true,
-      output: stdout,
-      error: stderr || null,
-    });
-  } catch (error) {
-    res.status(500).json({
+  if (!profile || typeof profile !== "string" || profile.trim() === "") {
+    return res.status(400).json({
       success: false,
-      error: error.message,
-      output: error.stdout || null,
-      stderr: error.stderr || null,
+      error: "Profile is required",
     });
   }
+
+  // Set up Server-Sent Events
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  // Send initial connection message
+  res.write("data: " + JSON.stringify({ type: "connected" }) + "\n\n");
+
+  // Spawn CLI process
+  const cliProcess = spawn(
+    "npm",
+    ["start", "--", `--profile=${profile}`, "--dry-run"],
+    {
+      cwd: CLI_DIR,
+      shell: true,
+    }
+  );
+
+  const processId = `${Date.now()}-${Math.random()}`;
+  activeProcesses.set(processId, cliProcess);
+
+  let accumulatedOutput = "";
+  let accumulatedStderr = "";
+
+  // Stream stdout
+  cliProcess.stdout.on("data", (data) => {
+    const chunk = data.toString();
+    accumulatedOutput += chunk;
+    res.write(
+      "data: " + JSON.stringify({ type: "stdout", data: chunk }) + "\n\n"
+    );
+  });
+
+  // Stream stderr
+  cliProcess.stderr.on("data", (data) => {
+    const chunk = data.toString();
+    accumulatedStderr += chunk;
+    res.write(
+      "data: " + JSON.stringify({ type: "stderr", data: chunk }) + "\n\n"
+    );
+  });
+
+  // Handle process completion
+  cliProcess.on("close", (code) => {
+    activeProcesses.delete(processId);
+
+    const result = {
+      type: "close",
+      code: code,
+      success: code === 0,
+      output: accumulatedOutput,
+      stderr: accumulatedStderr,
+    };
+
+    res.write("data: " + JSON.stringify(result) + "\n\n");
+    res.end();
+  });
+
+  // Handle process errors
+  cliProcess.on("error", (err) => {
+    activeProcesses.delete(processId);
+
+    const error = {
+      type: "error",
+      message: err.message,
+      output: accumulatedOutput,
+      stderr: accumulatedStderr,
+    };
+
+    res.write("data: " + JSON.stringify(error) + "\n\n");
+    res.end();
+  });
+
+  // Handle client disconnect
+  req.on("close", () => {
+    if (activeProcesses.has(processId)) {
+      cliProcess.kill("SIGTERM");
+      activeProcesses.delete(processId);
+    }
+  });
 });
 
 app.listen(PORT, () => {

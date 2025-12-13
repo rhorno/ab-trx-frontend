@@ -1,68 +1,137 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { parseOutput } from "./utils/outputParser";
+import QRCodeDisplay from "./components/QRCodeDisplay";
+import ImportStatus from "./components/ImportStatus";
+import "./App.css";
 
 function App() {
   const [profile, setProfile] = useState("");
   const [loading, setLoading] = useState(false);
-  const [output, setOutput] = useState(null);
+  const [output, setOutput] = useState("");
   const [error, setError] = useState(null);
+  const [parsedData, setParsedData] = useState(null);
+  const [eventSource, setEventSource] = useState(null);
+  const accumulatedOutputRef = useRef("");
 
-  const handleImport = async () => {
+  const handleImport = () => {
+    console.log("handleImport called, profile:", profile);
     if (!profile.trim()) {
       setError("Please enter a profile name");
       return;
     }
 
+    // Close existing connection if any
+    if (eventSource) {
+      eventSource.close();
+    }
+
     setLoading(true);
     setError(null);
-    setOutput(null);
+    setOutput("");
+    setParsedData(null);
+    accumulatedOutputRef.current = "";
 
-    try {
-      const response = await fetch("/api/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile: profile.trim() }),
-      });
+    // Create EventSource for Server-Sent Events
+    const url = `/api/import?profile=${encodeURIComponent(profile.trim())}`;
+    console.log("Creating EventSource with URL:", url);
+    const es = new EventSource(url);
+    console.log("EventSource created:", es);
 
-      const data = await response.json();
+    // Handle connection
+    es.addEventListener("message", (event) => {
+      try {
+        const data = JSON.parse(event.data);
 
-      if (data.success) {
-        setOutput(data.output);
-        setError(data.error || null);
-      } else {
-        setError(data.error || "Import failed");
-        setOutput(data.output || null);
+        if (data.type === "connected") {
+          // Connection established
+          return;
+        }
+
+        if (data.type === "stdout" || data.type === "stderr") {
+          // Accumulate output
+          accumulatedOutputRef.current += data.data;
+          setOutput(accumulatedOutputRef.current);
+
+          // Parse accumulated output in real-time to extract QR codes and status
+          const parsed = parseOutput(accumulatedOutputRef.current);
+          setParsedData(parsed);
+        }
+
+        if (data.type === "close") {
+          // Process completed
+          setLoading(false);
+          es.close();
+
+          // Final parse of complete output
+          const finalOutput = data.output || accumulatedOutputRef.current;
+          const finalStderr = data.stderr || "";
+          const finalParsed = parseOutput(finalOutput + "\n" + finalStderr);
+
+          if (data.success) {
+            finalParsed.success = true;
+          } else {
+            finalParsed.success = false;
+            if (finalStderr && !finalParsed.statusMessage) {
+              finalParsed.statusMessage = finalStderr.trim();
+            }
+          }
+
+          setParsedData(finalParsed);
+          setOutput(finalOutput);
+        }
+
+        if (data.type === "error") {
+          // Process error
+          setLoading(false);
+          setError(data.message || "Import failed");
+          es.close();
+
+          const errorParsed = parseOutput(
+            data.output || accumulatedOutputRef.current
+          );
+          errorParsed.success = false;
+          if (data.message && !errorParsed.statusMessage) {
+            errorParsed.statusMessage = data.message;
+          }
+          setParsedData(errorParsed);
+        }
+      } catch (err) {
+        console.error("Error parsing SSE data:", err);
       }
-    } catch (err) {
-      setError(`Network error: ${err.message}`);
-    } finally {
+    });
+
+    // Handle errors
+    es.onerror = (err) => {
+      console.error("EventSource error:", err);
       setLoading(false);
-    }
+      setError("Connection error. Please try again.");
+      es.close();
+    };
+
+    setEventSource(es);
   };
 
-  return (
-    <div
-      style={{
-        padding: "20px",
-        maxWidth: "800px",
-        margin: "0 auto",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <h1>AB Transaction Importer</h1>
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [eventSource]);
 
-      <div style={{ marginBottom: "20px" }}>
+  return (
+    <div className="app-container">
+      <h1 className="app-title">AB Transaction Importer</h1>
+
+      <div className="form-group">
         <input
           type="text"
           value={profile}
           onChange={(e) => setProfile(e.target.value)}
           placeholder="Enter profile name"
           disabled={loading}
-          style={{
-            padding: "8px",
-            width: "200px",
-            marginRight: "10px",
-            fontSize: "14px",
-          }}
+          className="profile-input"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !loading && profile.trim()) {
               handleImport();
@@ -72,50 +141,41 @@ function App() {
         <button
           onClick={handleImport}
           disabled={loading || !profile.trim()}
-          style={{
-            padding: "8px 16px",
-            fontSize: "14px",
-            cursor: loading || !profile.trim() ? "not-allowed" : "pointer",
-            opacity: loading || !profile.trim() ? 0.6 : 1,
-          }}
+          className="import-button"
         >
           {loading ? "Running..." : "Run Import"}
         </button>
       </div>
 
-      {error && (
-        <div
-          style={{
-            color: "red",
-            marginBottom: "10px",
-            padding: "10px",
-            backgroundColor: "#ffe6e6",
-            borderRadius: "4px",
-          }}
-        >
-          <strong>Error:</strong> {error}
-        </div>
+      {/* Display QR Code if available */}
+      {parsedData?.qrCode && <QRCodeDisplay qrCode={parsedData.qrCode} />}
+
+      {/* Display Import Status */}
+      {parsedData && (
+        <ImportStatus
+          success={parsedData.success}
+          transactionCount={parsedData.transactionCount}
+          statusMessage={parsedData.statusMessage || error}
+          isDryRun={true}
+          isWaitingAuth={
+            loading &&
+            parsedData.qrCode &&
+            parsedData.success === false &&
+            parsedData.transactionCount === null
+          }
+        />
       )}
 
-      {output && (
-        <div>
-          <h3>Output:</h3>
-          <pre
-            style={{
-              background: "#f5f5f5",
-              padding: "10px",
-              overflow: "auto",
-              maxHeight: "500px",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-              fontSize: "12px",
-              lineHeight: "1.4",
-            }}
-          >
-            {output}
-          </pre>
-        </div>
-      )}
+      {/* Fallback: Display raw output if parsing didn't extract key info or for debugging */}
+      {output &&
+        !parsedData?.qrCode &&
+        parsedData?.success === false &&
+        parsedData?.transactionCount === null && (
+          <div className="raw-output-container">
+            <h3 className="raw-output-title">Output:</h3>
+            <pre className="raw-output-pre">{output}</pre>
+          </div>
+        )}
     </div>
   );
 }
