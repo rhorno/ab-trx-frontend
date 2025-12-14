@@ -8,12 +8,16 @@ export interface Logger {
 }
 
 let isVerbose = false;
+let isDebugMode = false;
 
 /**
  * Initialize the logger with global settings
  */
 export function initializeLogger(verbose: boolean = false): void {
   isVerbose = verbose;
+  // Enable debug mode if DEBUG environment variable is set
+  isDebugMode =
+    process.env.DEBUG === "true" || process.env.NODE_ENV === "development";
 }
 
 /**
@@ -22,15 +26,15 @@ export function initializeLogger(verbose: boolean = false): void {
 export function getLogger(component: string): Logger {
   return {
     debug: (message: string) => {
-      if (isVerbose) {
-        console.log(`[${component}] ${message}`);
+      if (isVerbose || isDebugMode) {
+        console.log(`[DEBUG] [${component}] ${message}`);
       }
     },
     info: (message: string) => {
-      console.log(`[${component}] ${message}`);
+      console.log(`[INFO] [${component}] ${message}`);
     },
     error: (message: string) => {
       console.error(`[ERROR] [${component}] ${message}`);
-    }
+    },
   };
 }

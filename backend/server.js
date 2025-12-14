@@ -1,8 +1,21 @@
+// Load environment variables from .env file at project root
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import path from "path";
+
+// Resolve path to project root .env file
+// server.js is in backend/, so go up one level to project root
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..");
+const envPath = path.join(projectRoot, ".env");
+
+dotenv.config({ path: envPath });
+
 import express from "express";
 import cors from "cors";
 import { handleImport } from "./api/routes/import.js";
 import { handleListProfiles } from "./api/routes/profiles.js";
-
 const app = express();
 const PORT = 8000;
 
@@ -71,4 +84,10 @@ app.get("/api/import", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
+  if (process.env.DEBUG === "true") {
+    console.log("🐛 Debug mode enabled - verbose logging active");
+  }
+  if (process.env.USE_MOCK_SERVICES === "true") {
+    console.log("⚠️  Using MOCK services for testing");
+  }
 });

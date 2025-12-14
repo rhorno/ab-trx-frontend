@@ -4,15 +4,13 @@
  *
  * This service manages all configuration including environment variables,
  * profiles, and application settings.
+ *
+ * Note: Environment variables are loaded at application entry point (server.js)
  */
 
-import * as dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
-
-// Load environment variables from .env file
-dotenv.config({ quiet: true });
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
