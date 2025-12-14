@@ -1,6 +1,7 @@
-const express = require("express");
-const cors = require("cors");
-const { handleImport } = require("./api/routes/import.js");
+import express from "express";
+import cors from "cors";
+import { handleImport } from "./api/routes/import.js";
+import { handleListProfiles } from "./api/routes/profiles.js";
 
 const app = express();
 const PORT = 8000;
@@ -10,6 +11,11 @@ app.use(express.json());
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Profile listing endpoint
+app.get("/api/profiles", (req, res) => {
+  handleListProfiles(res);
 });
 
 // SSE endpoint for streaming import (now uses services instead of CLI)

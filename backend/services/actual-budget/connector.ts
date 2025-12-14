@@ -75,7 +75,7 @@ export class ApiBasedActualBudgetConnector implements ActualBudgetConnector {
     this.accountId = config.accountId;
     this.verbose = verbose;
     this.logger = getLogger("ActualBudget.API");
-    this.cacheDir = path.join(os.tmpdir(), "ab-trx-importer-cli-cache");
+    this.cacheDir = path.join(os.tmpdir(), "ab-trx-importer-cache");
   }
 
   /**

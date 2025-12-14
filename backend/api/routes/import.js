@@ -8,6 +8,9 @@
 // Note: For POC, using CommonJS. Services are ES modules, so we'll use dynamic imports.
 // In production, this should be converted to TypeScript/ES modules.
 
+// POC: Use mock services if USE_MOCK_SERVICES environment variable is set
+const USE_MOCK_SERVICES = process.env.USE_MOCK_SERVICES === "true";
+
 /**
  * Handle import request with SSE streaming
  * @param {string} profileName - Profile name to use for import
@@ -19,14 +22,40 @@ async function handleImport(profileName, res) {
   let bankInitialized = false;
 
   try {
-    // Dynamic imports for ES modules
-    const configModule = await import("../../services/configuration/index.js");
-    const actualBudgetModule = await import("../../services/actual-budget/index.js");
-    const bankModule = await import("../../services/bank-integration/index.js");
-
+    // Dynamic imports for ES modules (TypeScript files)
+    // Using .ts extension for tsx runtime, or .js if compiled
+    const configModule = await import("../../services/configuration/index.ts");
     configService = configModule.configurationService;
-    actualBudgetService = actualBudgetModule.actualBudgetService;
-    bankIntegrationService = bankModule.bankIntegrationService;
+
+    // Use mock or real services based on environment variable
+    if (USE_MOCK_SERVICES) {
+      const mockActualBudgetModule = await import(
+        "../../services/actual-budget/mock-actual-budget-service.ts"
+      );
+      const mockBankModule = await import(
+        "../../services/bank-integration/mock-bank-service.ts"
+      );
+      actualBudgetService = mockActualBudgetModule.mockActualBudgetService;
+      bankIntegrationService = mockBankModule.mockBankIntegrationService;
+
+      res.write(
+        "data: " +
+          JSON.stringify({
+            type: "progress",
+            message: "⚠️ Using MOCK services for testing",
+          }) +
+          "\n\n"
+      );
+    } else {
+      const actualBudgetModule = await import(
+        "../../services/actual-budget/index.ts"
+      );
+      const bankModule = await import(
+        "../../services/bank-integration/index.ts"
+      );
+      actualBudgetService = actualBudgetModule.actualBudgetService;
+      bankIntegrationService = bankModule.bankIntegrationService;
+    }
 
     // 1. Load configuration
     res.write(
@@ -223,8 +252,7 @@ async function handleImport(profileName, res) {
     res.end();
   } catch (error) {
     // Error handling with cleanup
-    const errorMessage =
-      error instanceof Error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     res.write(
       "data: " +
@@ -260,5 +288,4 @@ async function handleImport(profileName, res) {
   }
 }
 
-module.exports = { handleImport };
-
+export { handleImport };

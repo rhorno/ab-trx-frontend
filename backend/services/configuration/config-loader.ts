@@ -43,7 +43,7 @@ export interface Profile {
   actualAccountId: string;
 }
 
-interface ProfileCollection {
+export interface ProfileCollection {
   [profileName: string]: Profile;
 }
 
