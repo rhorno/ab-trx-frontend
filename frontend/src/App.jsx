@@ -15,6 +15,7 @@ function App() {
   const [parsedData, setParsedData] = useState(null);
   const [eventSource, setEventSource] = useState(null);
   const accumulatedOutputRef = useRef("");
+  const loadingRef = useRef(false);
 
   // Fetch profiles on component mount
   useEffect(() => {
@@ -72,6 +73,7 @@ function App() {
     }
 
     setLoading(true);
+    loadingRef.current = true;
     setError(null);
     setOutput("");
     setParsedData(null);
@@ -98,6 +100,8 @@ function App() {
           setParsedData((prev) => ({
             ...prev,
             qrCode: data.data, // Token string
+            // Don't set success to false when QR code appears - we're waiting for auth
+            success: prev?.success ?? null,
           }));
           return;
         }
@@ -109,12 +113,40 @@ function App() {
 
           // Parse accumulated output in real-time to extract QR codes and status
           const parsed = parseOutput(accumulatedOutputRef.current);
-          setParsedData(parsed);
+
+          // If we have a QR code and are still loading, preserve null success state
+          // Only set success to false if we have a clear error and no QR code
+          setParsedData((prev) => {
+            const hasQRCode = prev?.qrCode || parsed.qrCode;
+            const isStillLoading = loadingRef.current;
+
+            // If we have QR code and are loading, don't show error yet
+            // Only suppress error if there's no explicit error message
+            if (
+              hasQRCode &&
+              isStillLoading &&
+              parsed.success === false &&
+              !parsed.statusMessage
+            ) {
+              return {
+                ...parsed,
+                qrCode: prev?.qrCode || parsed.qrCode,
+                success: null, // Keep as null while waiting for auth
+              };
+            }
+
+            // Preserve QR code if it exists
+            return {
+              ...parsed,
+              qrCode: prev?.qrCode || parsed.qrCode,
+            };
+          });
         }
 
         if (data.type === "close") {
           // Process completed
           setLoading(false);
+          loadingRef.current = false;
           es.close();
 
           // Final parse of complete output
@@ -138,6 +170,7 @@ function App() {
         if (data.type === "error") {
           // Process error
           setLoading(false);
+          loadingRef.current = false;
           setError(data.message || "Import failed");
           es.close();
 
@@ -159,6 +192,7 @@ function App() {
     es.onerror = (err) => {
       console.error("EventSource error:", err);
       setLoading(false);
+      loadingRef.current = false;
       setError("Connection error. Please try again.");
       es.close();
     };
@@ -177,8 +211,6 @@ function App() {
 
   return (
     <div className="app-container">
-      <h1 className="app-title">AB Transaction Importer</h1>
-
       {/* Profiles List */}
       <div className="profiles-section">
         {profilesLoading && (
@@ -236,8 +268,9 @@ function App() {
           isWaitingAuth={
             loading &&
             parsedData.qrCode &&
-            parsedData.success === false &&
-            parsedData.transactionCount === null
+            (parsedData.success === null || parsedData.success === undefined) &&
+            parsedData.transactionCount === null &&
+            !parsedData.statusMessage
           }
         />
       )}

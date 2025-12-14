@@ -25,11 +25,13 @@ function ImportStatus({
     );
   }
 
-  if (success === null && !statusMessage) {
+  // Don't show anything if we don't have a status yet (null/undefined) and no message
+  if ((success === null || success === undefined) && !statusMessage) {
     return null;
   }
 
-  if (success) {
+  // Success state
+  if (success === true) {
     return (
       <div className="status-container status-success">
         <div className="status-header">
@@ -58,16 +60,21 @@ function ImportStatus({
     );
   }
 
-  // Error state
-  return (
-    <div className="status-container status-error">
-      <div className="status-header">
-        <span className="status-icon">✗</span>
-        <strong className="status-title">Import Failed</strong>
+  // Error state - only show when success is explicitly false
+  if (success === false) {
+    return (
+      <div className="status-container status-error">
+        <div className="status-header">
+          <span className="status-icon">✗</span>
+          <strong className="status-title">Import Failed</strong>
+        </div>
+        {statusMessage && <div className="status-message">{statusMessage}</div>}
       </div>
-      {statusMessage && <div className="status-message">{statusMessage}</div>}
-    </div>
-  );
+    );
+  }
+
+  // Default: don't show anything if success is null/undefined
+  return null;
 }
 
 export default ImportStatus;
