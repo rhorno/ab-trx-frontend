@@ -1,0 +1,43 @@
+{
+  "account": {
+    "accountNumber": "840716451",
+    "accountName": "Lönekonto",
+    "chosenName": "Lönekonto",
+    "system": "INLÅ",
+    "status": "N"
+  },
+  "dateRange": {
+    "startDate": "2025-12-11",
+    "endDate": "2025-12-14"
+  },
+  "transactions": [
+    {
+      "date": "2025-12-14",
+      "amount": -37000,
+      "payee_name": "Prel Kujira",
+      "notes": "",
+      "imported_id": "2025-12-14-1-2025-12-14-13.18.33.503843"
+    },
+    {
+      "date": "2025-12-12",
+      "amount": -200000,
+      "payee_name": "Resurs Bank",
+      "notes": "",
+      "imported_id": "2025-12-12-1-2025-12-12-04.50.10.087836"
+    },
+    {
+      "date": "2025-12-10",
+      "amount": -9640,
+      "payee_name": "COOP GRINDSGAT",
+      "notes": "",
+      "imported_id": "2025-12-10-1-2025-12-11-20.09.40.583546"
+    },
+    {
+      "date": "2025-12-10",
+      "amount": -8395,
+      "payee_name": "GOTGATSBACKEN",
+      "notes": "",
+      "imported_id": "2025-12-10-1-2025-12-11-20.09.40.580386"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 /**
  * Main entry point for Handelsbanken integration
  */
-import { BankClient, BankParams } from "../bank-client.js";
+import { BankClient, BankParams } from "../../bank-client.js";
 import { Transaction } from "../../../shared/types.js";
 import { chromium, Page } from "playwright";
 import { HandelsbankenAccount, LOGIN_URL } from "./models.js";

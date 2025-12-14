@@ -2,7 +2,7 @@ import {
   BankClient,
   DeduplicationConfig,
   DeduplicationResult,
-} from "../bank-client.js";
+} from "../../bank-client.js";
 import { Transaction } from "../../../shared/types.js";
 import { getLogger } from "../../../shared/logger.js";
 import readline from "readline";

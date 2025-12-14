@@ -1,7 +1,8 @@
 /**
  * QR Code Display Component
- * Displays ASCII art QR codes for BankID authentication
+ * Displays QR codes for BankID authentication using qrcode.react
  */
+import { QRCodeSVG } from "qrcode.react";
 
 function QRCodeDisplay({ qrCode }) {
   if (!qrCode) {
@@ -15,7 +16,14 @@ function QRCodeDisplay({ qrCode }) {
         Scan the QR code below with your BankID mobile app
       </p>
       <div className="qr-code-box">
-        <pre className="qr-code-pre">{qrCode}</pre>
+        <QRCodeSVG
+          value={qrCode}
+          size={200}
+          level="M"
+          bgColor="#ffffff"
+          fgColor="#000000"
+          includeMargin={true}
+        />
       </div>
       <p className="qr-footer">
         The QR code will automatically update if it expires.

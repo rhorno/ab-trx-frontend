@@ -2,7 +2,6 @@
  * Authentication service for Handelsbanken BankID
  */
 import { Page } from "playwright";
-import { renderQrToken } from "./utils.js";
 import { LOGIN_URL } from "./models.js";
 import { getLogger, Logger } from "../../../shared/logger.js";
 
@@ -314,11 +313,13 @@ export class AuthService {
     const qrStartToken = await this.findQrCodeWithMultipleAttempts();
 
     if (qrStartToken) {
-      // Found the QR token, display it
+      // Found the QR token, log it (frontend will render)
       this.log(
-        `Successfully obtained QR token: ${qrStartToken.substring(0, 10)}...`
+        `Successfully obtained QR token: ${qrStartToken.substring(
+          0,
+          10
+        )}...${qrStartToken.substring(qrStartToken.length - 5)}`
       );
-      await renderQrToken(qrStartToken);
 
       // POC: Notify service layer of QR code
       if (this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
@@ -399,11 +400,19 @@ export class AuthService {
               const token = findToken(data);
               if (token) {
                 this.log(
-                  `Found QR token in API response: ${token.substring(0, 10)}...`
+                  `Found QR token in API response: ${token.substring(
+                    0,
+                    10
+                  )}...${token.substring(token.length - 5)}`
                 );
                 this.qrStartToken = token;
-                // Always render the QR code when found in an API response
-                await renderQrToken(token);
+                // Notify service layer (frontend will render)
+                if (
+                  this.serviceRef &&
+                  typeof this.serviceRef.setQrToken === "function"
+                ) {
+                  this.serviceRef.setQrToken(token);
+                }
               }
             }
           }
@@ -854,8 +863,13 @@ export class AuthService {
           )}...`
         );
         const token = this.qrStartToken;
-        // Always render the QR code when found
-        await renderQrToken(token);
+        // Log token (frontend will render)
+        this.log(
+          `QR token from intercepted responses: ${token.substring(
+            0,
+            10
+          )}...${token.substring(token.length - 5)}`
+        );
         // POC: Notify service layer
         if (
           this.serviceRef &&
@@ -870,11 +884,13 @@ export class AuthService {
       const extractedToken = await this.extractQrCodeFromPage();
       if (extractedToken) {
         this.log(
-          `Successfully extracted QR code from page on attempt ${i + 1}`
+          `Successfully extracted QR code from page on attempt ${
+            i + 1
+          }: ${extractedToken.substring(0, 10)}...${extractedToken.substring(
+            extractedToken.length - 5
+          )}`
         );
-        // Always render the QR code when found
-        await renderQrToken(extractedToken);
-        // POC: Notify service layer
+        // POC: Notify service layer (frontend will render)
         if (
           this.serviceRef &&
           typeof this.serviceRef.setQrToken === "function"

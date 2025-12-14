@@ -10,6 +10,10 @@
 
 // POC: Use mock services if USE_MOCK_SERVICES environment variable is set
 const USE_MOCK_SERVICES = process.env.USE_MOCK_SERVICES === "true";
+// POC: Use dry-run mode if DRY_RUN environment variable is set (defaults to true when USE_MOCK_SERVICES is true)
+const DRY_RUN =
+  process.env.DRY_RUN === "true" ||
+  (process.env.DRY_RUN === undefined && USE_MOCK_SERVICES);
 
 /**
  * Handle import request with SSE streaming
@@ -154,12 +158,13 @@ async function handleImport(profileName, res) {
     // This will catch QR codes and auth status updates
     bankIntegrationService.onAuthStatus((status) => {
       // If status includes QR code data, stream it separately
-      if (status.qrCode) {
+      // Send only the token string - frontend will render the QR code
+      if (status.qrCode && status.qrCode.token) {
         res.write(
           "data: " +
             JSON.stringify({
               type: "qr-code",
-              data: status.qrCode,
+              data: status.qrCode.token,
             }) +
             "\n\n"
         );
@@ -211,20 +216,22 @@ async function handleImport(profileName, res) {
         "\n\n"
     );
 
-    // 7. Import to Actual Budget (dry-run for POC)
+    // 7. Import to Actual Budget
     res.write(
       "data: " +
         JSON.stringify({
           type: "progress",
-          message: "Importing transactions (dry-run)...",
+          message: DRY_RUN
+            ? "Importing transactions (dry-run)..."
+            : "Importing transactions...",
         }) +
         "\n\n"
     );
 
     const result = await actualBudgetService.importTransactions(
       transactions,
-      true
-    ); // dry-run
+      DRY_RUN
+    );
 
     res.write(
       "data: " +
@@ -232,7 +239,9 @@ async function handleImport(profileName, res) {
           type: "success",
           count: result.added,
           skipped: result.skipped,
-          message: `Import complete: ${result.added} transactions would be imported`,
+          message: DRY_RUN
+            ? `Import complete: ${result.added} transactions would be imported`
+            : `Import complete: ${result.added} transactions imported`,
         }) +
         "\n\n"
     );

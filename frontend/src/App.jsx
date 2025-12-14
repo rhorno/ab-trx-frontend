@@ -1,11 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { parseOutput } from "./utils/outputParser";
 import QRCodeDisplay from "./components/QRCodeDisplay";
 import ImportStatus from "./components/ImportStatus";
 import "./App.css";
 
 function App() {
-  const [profile, setProfile] = useState("");
+  const [profiles, setProfiles] = useState([]);
+  const [profilesLoading, setProfilesLoading] = useState(true);
+  const [profilesError, setProfilesError] = useState(null);
+  const [selectedProfile, setSelectedProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState("");
   const [error, setError] = useState(null);
@@ -13,12 +16,55 @@ function App() {
   const [eventSource, setEventSource] = useState(null);
   const accumulatedOutputRef = useRef("");
 
-  const handleImport = () => {
-    console.log("handleImport called, profile:", profile);
-    if (!profile.trim()) {
-      setError("Please enter a profile name");
+  // Fetch profiles on component mount
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchProfiles = async () => {
+      try {
+        setProfilesLoading(true);
+        setProfilesError(null);
+
+        const response = await fetch("/api/profiles", {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch profiles: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.profiles)) {
+          setProfiles(data.profiles);
+        } else {
+          throw new Error("Invalid response format from profiles API");
+        }
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          console.error("Error fetching profiles:", err);
+          setProfilesError(err.message || "Failed to load profiles");
+        }
+      } finally {
+        setProfilesLoading(false);
+      }
+    };
+
+    fetchProfiles();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  const handleImport = useCallback(() => {
+    console.log("handleImport called, profile:", selectedProfile);
+    if (!selectedProfile || !selectedProfile.trim()) {
+      setError("Please select a profile first");
       return;
     }
+
+    const profileName = selectedProfile;
 
     // Close existing connection if any
     if (eventSource) {
@@ -32,7 +78,7 @@ function App() {
     accumulatedOutputRef.current = "";
 
     // Create EventSource for Server-Sent Events
-    const url = `/api/import?profile=${encodeURIComponent(profile.trim())}`;
+    const url = `/api/import?profile=${encodeURIComponent(profileName.trim())}`;
     console.log("Creating EventSource with URL:", url);
     const es = new EventSource(url);
     console.log("EventSource created:", es);
@@ -44,6 +90,15 @@ function App() {
 
         if (data.type === "connected") {
           // Connection established
+          return;
+        }
+
+        if (data.type === "qr-code") {
+          // Handle QR code token from backend (token string)
+          setParsedData((prev) => ({
+            ...prev,
+            qrCode: data.data, // Token string
+          }));
           return;
         }
 
@@ -109,7 +164,7 @@ function App() {
     };
 
     setEventSource(es);
-  };
+  }, [eventSource, selectedProfile]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -124,27 +179,48 @@ function App() {
     <div className="app-container">
       <h1 className="app-title">AB Transaction Importer</h1>
 
-      <div className="form-group">
-        <input
-          type="text"
-          value={profile}
-          onChange={(e) => setProfile(e.target.value)}
-          placeholder="Enter profile name"
-          disabled={loading}
-          className="profile-input"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !loading && profile.trim()) {
-              handleImport();
-            }
-          }}
-        />
-        <button
-          onClick={handleImport}
-          disabled={loading || !profile.trim()}
-          className="import-button"
-        >
-          {loading ? "Running..." : "Run Import"}
-        </button>
+      {/* Profiles List */}
+      <div className="profiles-section">
+        {profilesLoading && (
+          <div className="profiles-loading">Loading profiles...</div>
+        )}
+
+        {profilesError && (
+          <div className="profiles-error">
+            Error loading profiles: {profilesError}
+          </div>
+        )}
+
+        {!profilesLoading && !profilesError && profiles.length === 0 && (
+          <div className="profiles-empty">No profiles available</div>
+        )}
+
+        {!profilesLoading && !profilesError && profiles.length > 0 && (
+          <>
+            <div className="profiles-list">
+              {profiles.map((profile) => (
+                <div
+                  key={profile.name}
+                  className={`profile-item ${
+                    selectedProfile === profile.name ? "selected" : ""
+                  }`}
+                  onClick={() => setSelectedProfile(profile.name)}
+                >
+                  <span className="profile-name">{profile.name}</span>
+                </div>
+              ))}
+            </div>
+            <div className="import-section">
+              <button
+                onClick={handleImport}
+                disabled={loading || !selectedProfile}
+                className="import-button"
+              >
+                {loading ? "Running..." : "Import"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Display QR Code if available */}

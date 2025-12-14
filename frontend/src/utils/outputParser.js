@@ -5,69 +5,12 @@
 
 /**
  * Detects QR code in output (ASCII art pattern)
- * QR codes typically contain blocks of ▄ and █ characters
+ * NOTE: QR codes are now received via SSE events, so this always returns null.
+ * Kept for backward compatibility but no longer parses output.
  */
 function extractQRCode(output) {
-  if (!output) return null;
-
-  const lines = output.split("\n");
-
-  // Look for QR code section - typically starts after "HANDELSBANKEN BANKID AUTHENTICATION"
-  // and contains ASCII art with ▄ and █ characters
-  let inQRSection = false;
-  let qrStart = -1;
-  let qrEnd = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Detect start of QR code section
-    if (/HANDELSBANKEN BANKID AUTHENTICATION/i.test(line)) {
-      inQRSection = true;
-      continue;
-    }
-
-    // Look for the actual QR code ASCII art (starts with line containing ▄▄▄▄▄)
-    if (inQRSection && qrStart === -1 && /^[\s]*▄{10,}/.test(line)) {
-      qrStart = i;
-      continue;
-    }
-
-    // Find end of QR code (when we stop seeing ▄ or █ characters)
-    if (qrStart !== -1 && qrEnd === -1) {
-      // QR code lines contain only ▄, █, ▀, and whitespace
-      const isQRLine = /^[\s▄█▀]*$/.test(line) && line.trim().length > 0;
-
-      if (!isQRLine && i > qrStart + 5) {
-        // We've left the QR code area
-        qrEnd = i - 1;
-        break;
-      }
-    }
-  }
-
-  if (qrStart !== -1) {
-    if (qrEnd === -1) {
-      // Use a reasonable default end (QR codes are typically 20-25 lines)
-      qrEnd = Math.min(qrStart + 25, lines.length - 1);
-    }
-
-    // Extract QR code lines, trim empty lines at start/end
-    const qrLines = lines.slice(qrStart, qrEnd + 1);
-
-    // Remove leading/trailing empty lines
-    while (qrLines.length > 0 && qrLines[0].trim() === "") {
-      qrLines.shift();
-    }
-    while (qrLines.length > 0 && qrLines[qrLines.length - 1].trim() === "") {
-      qrLines.pop();
-    }
-
-    if (qrLines.length > 0) {
-      return qrLines.join("\n");
-    }
-  }
-
+  // QR codes are now sent via SSE events (type: "qr-code")
+  // No need to parse ASCII art from output
   return null;
 }
 
