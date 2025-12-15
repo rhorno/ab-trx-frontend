@@ -17,39 +17,52 @@ bashio::log.info "Backend port: ${BACKEND_PORT}"
 export NODE_ENV=production
 export PORT=${BACKEND_PORT}
 
-# Link config directory to app root for .env and profiles.json
-# Use /data for add-on persistent data, or /config if mapped
+# Get configuration values from addon config
+ENV_CONTENT=$(bashio::config 'env_content')
+PROFILES_JSON=$(bashio::config 'profiles_json')
+
+# Use /data for add-on persistent data
 CONFIG_DIR="/data"
-if [ -d "/config/ab-trx-importer" ]; then
-    CONFIG_DIR="/config/ab-trx-importer"
-fi
 APP_ROOT="/app"
 
-# Log which config directory is being used
-bashio::log.info "Using configuration directory: ${CONFIG_DIR}"
+# Ensure config directory exists
+mkdir -p "${CONFIG_DIR}"
 
-# Ensure required configuration files exist and create symlinks
+# Write .env file from configuration
 ENV_FILE="${CONFIG_DIR}/.env"
+if [ -n "${ENV_CONTENT}" ]; then
+    bashio::log.info "Writing .env file from configuration"
+    echo "${ENV_CONTENT}" > "${ENV_FILE}"
+else
+    bashio::log.error "env_content is required in addon configuration"
+    bashio::log.error "Please configure the .env content in the addon settings"
+    exit 1
+fi
+
+# Write profiles.json file from configuration
 PROFILES_FILE="${CONFIG_DIR}/profiles.json"
+if [ -n "${PROFILES_JSON}" ]; then
+    bashio::log.info "Writing profiles.json file from configuration"
+    echo "${PROFILES_JSON}" > "${PROFILES_FILE}"
 
-if [ -f "${ENV_FILE}" ]; then
-    bashio::log.info "Found .env at ${ENV_FILE}, linking to ${APP_ROOT}/.env"
-    ln -sf "${ENV_FILE}" "${APP_ROOT}/.env"
+    # Validate JSON syntax using Node.js
+    if ! node -e "JSON.parse(require('fs').readFileSync('${PROFILES_FILE}', 'utf8'))" > /dev/null 2>&1; then
+        bashio::log.error "profiles_json contains invalid JSON"
+        exit 1
+    fi
 else
-    bashio::log.error "Required configuration file not found: ${ENV_FILE}"
-    bashio::log.error "AB Transaction Importer cannot start without a valid .env file."
+    bashio::log.error "profiles_json is required in addon configuration"
+    bashio::log.error "Please configure the profiles.json content in the addon settings"
     exit 1
 fi
 
-if [ -f "${PROFILES_FILE}" ]; then
-    bashio::log.info "Found profiles.json at ${PROFILES_FILE}, linking to ${APP_ROOT}/backend/services/configuration/profiles.json"
-    mkdir -p "${APP_ROOT}/backend/services/configuration"
-    ln -sf "${PROFILES_FILE}" "${APP_ROOT}/backend/services/configuration/profiles.json"
-else
-    bashio::log.error "Required configuration file not found: ${PROFILES_FILE}"
-    bashio::log.error "AB Transaction Importer cannot start without a valid profiles.json file."
-    exit 1
-fi
+# Create symlinks to app root
+bashio::log.info "Linking .env to ${APP_ROOT}/.env"
+ln -sf "${ENV_FILE}" "${APP_ROOT}/.env"
+
+bashio::log.info "Linking profiles.json to ${APP_ROOT}/backend/services/configuration/profiles.json"
+mkdir -p "${APP_ROOT}/backend/services/configuration"
+ln -sf "${PROFILES_FILE}" "${APP_ROOT}/backend/services/configuration/profiles.json"
 
 # Function to handle shutdown
 cleanup() {

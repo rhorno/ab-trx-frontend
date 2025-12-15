@@ -52,7 +52,7 @@ WORKDIR /app/backend
 RUN npx playwright install chromium || true
 RUN npx playwright install-deps chromium || true
 
-# Copy backend server.js (symlinks created by prepare-build.sh, not compiled, stays as JS)
+# Copy backend server.js (not compiled, stays as JS)
 WORKDIR /app
 COPY backend/server.js ./backend/
 
