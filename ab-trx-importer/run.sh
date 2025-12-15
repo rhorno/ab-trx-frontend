@@ -137,7 +137,8 @@ fi
 
 # Check what we got and clean it up if needed
 bashio::log.info "Raw profiles data size: $(wc -c < "${TEMP_INPUT}" 2>/dev/null || echo 0) bytes"
-# bashio::config might output extra whitespace or newlines, so we'll let Node.js handle trimming
+# Log first 200 chars for debugging (but don't log sensitive data in production)
+bashio::log.info "Raw profiles data preview (first 200 chars): $(head -c 200 "${TEMP_INPUT}" 2>/dev/null | tr -d '\n' || echo 'N/A')"
 bashio::log.info "Profiles fetched, processing with Node.js..."
 
 # Process with Node.js script
@@ -151,19 +152,37 @@ try {
   // Trim whitespace and newlines that bashio might add
   profilesData = profilesData.trim();
 
-  // If the data starts with a newline or has multiple JSON objects, take the first one
-  // bashio might output multiple lines or extra content
-  const firstBrace = profilesData.indexOf('[');
-  const lastBrace = profilesData.lastIndexOf(']');
+  // Debug: log what we received
+  console.error('DEBUG: First 100 chars of input:', profilesData.substring(0, 100));
+  console.error('DEBUG: Input length:', profilesData.length);
 
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    throw new Error('Invalid JSON structure: missing array brackets');
+  let profilesArray;
+
+  // Try to parse as-is first
+  try {
+    profilesArray = JSON.parse(profilesData);
+    // If it parsed successfully, check if it's an array
+    if (!Array.isArray(profilesArray)) {
+      throw new Error('Parsed JSON is not an array');
+    }
+  } catch (parseError) {
+    // If direct parse failed, try to extract array from the data
+    const firstBrace = profilesData.indexOf('[');
+    const lastBrace = profilesData.lastIndexOf(']');
+
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      // Extract just the JSON array part
+      const jsonPart = profilesData.substring(firstBrace, lastBrace + 1);
+      console.error('DEBUG: Extracted JSON part (first 100 chars):', jsonPart.substring(0, 100));
+      profilesArray = JSON.parse(jsonPart);
+    } else {
+      // If no brackets found, maybe it's a different format
+      // Try to see if it's a single object or something else
+      console.error('DEBUG: No array brackets found, trying alternative parsing...');
+      throw new Error(\`Invalid JSON structure: missing array brackets. First 200 chars: \${profilesData.substring(0, 200)}\`);
+    }
   }
 
-  // Extract just the JSON array part
-  const jsonPart = profilesData.substring(firstBrace, lastBrace + 1);
-
-  const profilesArray = JSON.parse(jsonPart);
   const profilesObject = {};
 
   profilesArray.forEach((profile, index) => {
@@ -197,11 +216,20 @@ EOF
 NODE_EXIT_CODE=$?
 set -e  # Re-enable exit on error
 bashio::log.info "Node.js script finished with exit code: ${NODE_EXIT_CODE}"
+
+# Show debug output if there was an error
 if [ $NODE_EXIT_CODE -ne 0 ]; then
     bashio::log.error "Failed to generate profiles.json from configuration (exit code: ${NODE_EXIT_CODE})"
     if [ -f "${TEMP_OUTPUT}" ]; then
         bashio::log.error "Error output:"
         cat "${TEMP_OUTPUT}" || true
+    fi
+    if [ -f "${TEMP_INPUT}" ]; then
+        bashio::log.error "Input data (first 500 chars):"
+        head -c 500 "${TEMP_INPUT}" || true
+        bashio::log.error ""
+        bashio::log.error "Input data (hex dump of first 200 bytes):"
+        head -c 200 "${TEMP_INPUT}" | xxd || head -c 200 "${TEMP_INPUT}" | od -c | head -20 || true
     fi
     rm -f "${TEMP_INPUT}" "${TEMP_OUTPUT}"
     exit 1
@@ -232,6 +260,32 @@ mv "${TEMP_OUTPUT}" "${PROFILES_FILE}" || {
 # Cleanup temp input file
 rm -f "${TEMP_INPUT}"
 bashio::log.info "Node.js script completed successfully"
+
+# Validate the output JSON file is valid and properly formatted
+bashio::log.info "Validating output profiles.json file..."
+if ! node -e "
+  const fs = require('fs');
+  try {
+    const content = fs.readFileSync('${PROFILES_FILE}', 'utf8');
+    const parsed = JSON.parse(content);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      console.error('ERROR: Output is not a valid profiles object');
+      process.exit(1);
+    }
+    const profileCount = Object.keys(parsed).length;
+    console.log(\`SUCCESS: Valid profiles.json with \${profileCount} profile(s)\`);
+  } catch (error) {
+    console.error('ERROR: Invalid JSON in output file:', error.message);
+    process.exit(1);
+  }
+" 2>&1; then
+    bashio::log.error "Output profiles.json validation failed"
+    bashio::log.error "Contents of profiles.json:"
+    head -50 "${PROFILES_FILE}" || true
+    exit 1
+fi
+VALIDATION_OUTPUT=$(node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('${PROFILES_FILE}', 'utf8')); console.log(Object.keys(p).length + ' profiles')" 2>&1)
+bashio::log.info "Output validation successful: ${VALIDATION_OUTPUT}"
 
 # Check if profiles.json was created and is valid
 bashio::log.info "Checking if profiles.json file exists at: ${PROFILES_FILE}"
