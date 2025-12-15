@@ -152,17 +152,14 @@ try {
   // Trim whitespace and newlines that bashio might add
   profilesData = profilesData.trim();
 
-  // Debug: log what we received
-  console.error('DEBUG: First 100 chars of input:', profilesData.substring(0, 100));
-  console.error('DEBUG: Input length:', profilesData.length);
-
   let profilesArray;
 
-  // Try to parse as-is first
+  // Try to parse as JSON array first
   try {
-    profilesArray = JSON.parse(profilesData);
-    // If it parsed successfully, check if it's an array
-    if (!Array.isArray(profilesArray)) {
+    const parsed = JSON.parse(profilesData);
+    if (Array.isArray(parsed)) {
+      profilesArray = parsed;
+    } else {
       throw new Error('Parsed JSON is not an array');
     }
   } catch (parseError) {
@@ -173,13 +170,28 @@ try {
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
       // Extract just the JSON array part
       const jsonPart = profilesData.substring(firstBrace, lastBrace + 1);
-      console.error('DEBUG: Extracted JSON part (first 100 chars):', jsonPart.substring(0, 100));
       profilesArray = JSON.parse(jsonPart);
     } else {
-      // If no brackets found, maybe it's a different format
-      // Try to see if it's a single object or something else
-      console.error('DEBUG: No array brackets found, trying alternative parsing...');
-      throw new Error(\`Invalid JSON structure: missing array brackets. First 200 chars: \${profilesData.substring(0, 200)}\`);
+      // bashio::config outputs newline-delimited JSON (one object per line)
+      // Parse each line as a separate JSON object
+      const lines = profilesData.split('\\n').filter(line => line.trim().length > 0);
+      profilesArray = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.length > 0) {
+          try {
+            const profile = JSON.parse(line);
+            profilesArray.push(profile);
+          } catch (lineError) {
+            throw new Error(\`Failed to parse profile at line \${i + 1}: \${lineError.message}\`);
+          }
+        }
+      }
+
+      if (profilesArray.length === 0) {
+        throw new Error('No valid profiles found in input data');
+      }
     }
   }
 
