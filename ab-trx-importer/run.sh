@@ -134,6 +134,10 @@ if ! bashio::config 'profiles' > "${TEMP_INPUT}" 2>&1; then
     bashio::log.error "Failed to get profiles from configuration"
     exit 1
 fi
+
+# Check what we got and clean it up if needed
+bashio::log.info "Raw profiles data size: $(wc -c < "${TEMP_INPUT}" 2>/dev/null || echo 0) bytes"
+# bashio::config might output extra whitespace or newlines, so we'll let Node.js handle trimming
 bashio::log.info "Profiles fetched, processing with Node.js..."
 
 # Process with Node.js script
@@ -142,8 +146,24 @@ set +e  # Temporarily disable exit on error to capture exit code
 node <<EOF > "${TEMP_OUTPUT}" 2>&1
 const fs = require('fs');
 try {
-  const profilesData = fs.readFileSync('${TEMP_INPUT}', 'utf8');
-  const profilesArray = JSON.parse(profilesData);
+  let profilesData = fs.readFileSync('${TEMP_INPUT}', 'utf8');
+
+  // Trim whitespace and newlines that bashio might add
+  profilesData = profilesData.trim();
+
+  // If the data starts with a newline or has multiple JSON objects, take the first one
+  // bashio might output multiple lines or extra content
+  const firstBrace = profilesData.indexOf('[');
+  const lastBrace = profilesData.lastIndexOf(']');
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    throw new Error('Invalid JSON structure: missing array brackets');
+  }
+
+  // Extract just the JSON array part
+  const jsonPart = profilesData.substring(firstBrace, lastBrace + 1);
+
+  const profilesArray = JSON.parse(jsonPart);
   const profilesObject = {};
 
   profilesArray.forEach((profile, index) => {
