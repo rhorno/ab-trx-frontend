@@ -51,6 +51,14 @@ export default class HandelsbankenClient extends BankClient {
     if (this.serviceRef && this.authService.setServiceRef) {
       this.authService.setServiceRef(this.serviceRef);
     }
+
+    // Pass authMode to auth service if provided
+    if (this.params.authMode && typeof this.params.authMode === "string") {
+      const authMode = this.params.authMode as "same-device" | "other-device";
+      if (authMode === "same-device" || authMode === "other-device") {
+        this.authService.setAuthMode(authMode);
+      }
+    }
   }
 
   /**

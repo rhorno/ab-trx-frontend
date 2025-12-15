@@ -10,6 +10,7 @@ export class AuthService {
   private readonly verbose: boolean;
   private qrStartToken: string | null = null;
   private autoStartToken: string | null = null;
+  private authMode: "same-device" | "other-device" | null = null;
   private logger: Logger;
   private serviceRef: any = null; // POC: Reference to service for QR code notifications
 
@@ -18,6 +19,13 @@ export class AuthService {
    */
   setServiceRef(service: any): void {
     this.serviceRef = service;
+  }
+
+  /**
+   * Set authentication mode (same-device for app-to-app, other-device for QR)
+   */
+  setAuthMode(mode: "same-device" | "other-device" | null): void {
+    this.authMode = mode;
   }
 
   /**
@@ -275,32 +283,31 @@ export class AuthService {
    * Handle the BankID authentication flow for Handelsbanken
    */
   private async handleBankIdAuthentication(): Promise<void> {
-    // Setup QR token detection
+    // Setup token detection (for both autoStartToken and qrStartToken)
     this.setupQrCodeDetection();
 
-    // Wait for the QR login screen - we look both for the mobile QR and desktop QR options
-    this.log("Waiting for BankID QR login screen...");
+    // Wait for the BankID choice screen to appear
+    this.log("Waiting for BankID authentication choice screen...");
     try {
+      // Wait for either the same-device or other-device button to appear
       await Promise.race([
         this.page.waitForSelector(
-          'a[data-test-id="QrInitiateMobileDeviceLaunch-QrInitiateMobileDeviceLaunchLinkBtn"]',
+          'button[data-test-id="MBIDStartStage__loginButtonSameDevice"]',
           { timeout: 10000 }
         ),
         this.page.waitForSelector(
-          '[data-test-id="QrInitiateOtherDeviceLaunch-QrInitiateOtherDeviceLaunchBtn"]',
+          'button[data-test-id="MBIDStartStage__otherDeviceButton"]',
           { timeout: 10000 }
         ),
-        this.page.waitForSelector('img[src^="data:image/png;base64"]', {
-          timeout: 10000,
-        }),
-        this.page.waitForSelector('[class*="qr"],[id*="qr"]', {
-          timeout: 10000,
-        }),
+        this.page.waitForSelector(
+          'button[data-test-id="MBIDStartStage__loginButton"]',
+          { timeout: 10000 }
+        ),
       ]);
-      this.log("Found QR login option screen.");
+      this.log("Found BankID choice screen.");
     } catch (error) {
       this.log(
-        "Could not find QR login screen through selectors, but continuing anyway."
+        "Could not find BankID choice screen through selectors, but continuing anyway."
       );
     }
 
@@ -310,38 +317,102 @@ export class AuthService {
     // Set up login success detection (this runs in parallel)
     const loginPromise = this.setupLoginSuccessDetection();
 
-    // Try to find the QR code with multiple attempts
-    const qrStartToken = await this.findQrCodeWithMultipleAttempts();
+    // Based on authMode, click the appropriate button
+    if (this.authMode === "same-device") {
+      this.log("Auth mode: same-device - clicking 'Open BankID app' button...");
+      try {
+        // Click the same-device button to trigger app-to-app flow
+        await this.page.click(
+          'button[data-test-id="MBIDStartStage__loginButtonSameDevice"]'
+        );
+        this.log("Clicked same-device button, waiting for autoStartToken...");
 
-    if (qrStartToken) {
-      // Found the QR token, log it (frontend will render)
-      this.log(
-        `Successfully obtained QR token: ${qrStartToken.substring(
-          0,
-          10
-        )}...${qrStartToken.substring(qrStartToken.length - 5)}`
-      );
+        // Wait for autoStartToken to be captured via network interception
+        await this.waitForAutoStartToken(30000); // 30 second timeout
 
-      // POC: Notify service layer of QR code
-      if (this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
-        this.serviceRef.setQrToken(qrStartToken);
+        if (this.autoStartToken) {
+          this.log(
+            `Successfully obtained autoStartToken: ${this.autoStartToken.substring(
+              0,
+              10
+            )}...${this.autoStartToken.substring(this.autoStartToken.length - 5)}`
+          );
+          // Token is already captured and sent via setupQrCodeDetection -> setAutoStartToken
+        } else {
+          this.log("Warning: autoStartToken not received after clicking same-device button");
+        }
+      } catch (error) {
+        this.log(`Error clicking same-device button: ${error}`);
+        // Try alternative click method
+        await this.page.evaluate(() => {
+          const button = document.querySelector(
+            'button[data-test-id="MBIDStartStage__loginButtonSameDevice"]'
+          );
+          if (button) (button as HTMLButtonElement).click();
+        });
+        await this.waitForAutoStartToken(30000);
+      }
+    } else if (this.authMode === "other-device") {
+      this.log("Auth mode: other-device - clicking 'Use another device' button...");
+      try {
+        // Click the other-device button to trigger QR code flow
+        await this.page.click(
+          'button[data-test-id="MBIDStartStage__otherDeviceButton"]'
+        );
+        this.log("Clicked other-device button, waiting for qrStartToken...");
+
+        // Wait for QR code token
+        const qrStartToken = await this.findQrCodeWithMultipleAttempts();
+
+        if (qrStartToken) {
+          this.log(
+            `Successfully obtained QR token: ${qrStartToken.substring(
+              0,
+              10
+            )}...${qrStartToken.substring(qrStartToken.length - 5)}`
+          );
+          // POC: Notify service layer of QR code
+          if (this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
+            this.serviceRef.setQrToken(qrStartToken);
+          }
+        } else {
+          this.log("Could not find QR code token automatically.");
+        }
+      } catch (error) {
+        this.log(`Error clicking other-device button: ${error}`);
+        // Fallback: try to find QR code anyway
+        const qrStartToken = await this.findQrCodeWithMultipleAttempts();
+        if (qrStartToken && this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
+          this.serviceRef.setQrToken(qrStartToken);
+        }
       }
     } else {
-      // Could not find the QR token, inform the user
-      this.log("Could not find QR code token automatically.");
-      console.log("\nUnable to automatically extract QR code.");
-      console.log(
-        "Please scan the QR code shown in the browser window with your BankID app."
-      );
-      console.log(
-        "If no QR code is visible, look for a button to show the QR code or try an alternative login method.\n"
-      );
+      // No authMode specified - fallback to old behavior (look for QR code)
+      this.log("No authMode specified, falling back to QR code detection...");
+      const qrStartToken = await this.findQrCodeWithMultipleAttempts();
+      if (qrStartToken && this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
+        this.serviceRef.setQrToken(qrStartToken);
+      }
     }
 
     // Wait for the login to complete
     this.log("Waiting for BankID authentication to complete...");
     await loginPromise;
     this.log("BankID authentication completed successfully.");
+  }
+
+  /**
+   * Wait for autoStartToken to be captured via network interception
+   */
+  private async waitForAutoStartToken(timeoutMs: number): Promise<void> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      if (this.autoStartToken) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    this.log("Timeout waiting for autoStartToken");
   }
 
   /**
