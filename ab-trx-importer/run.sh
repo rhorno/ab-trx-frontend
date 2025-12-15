@@ -25,12 +25,6 @@ ACTUAL_ENCRYPTION_KEY=$(bashio::config 'actual_encryption_key')
 DEBUG=$(bashio::config 'debug')
 USE_MOCK_SERVICES=$(bashio::config 'use_mock_services')
 
-PROFILE_NAME=$(bashio::config 'profile_name')
-BANK=$(bashio::config 'bank')
-ACTUAL_ACCOUNT_ID=$(bashio::config 'actual_account_id')
-PERSONNUMMER=$(bashio::config 'personnummer')
-ACCOUNT_NAME=$(bashio::config 'account_name')
-
 # Validate required fields
 if [ -z "${ACTUAL_SERVER_URL}" ] || [ -z "${ACTUAL_PASSWORD}" ] || [ -z "${ACTUAL_SYNC_ID}" ]; then
     bashio::log.error "Required Actual Budget configuration missing"
@@ -38,9 +32,11 @@ if [ -z "${ACTUAL_SERVER_URL}" ] || [ -z "${ACTUAL_PASSWORD}" ] || [ -z "${ACTUA
     exit 1
 fi
 
-if [ -z "${PROFILE_NAME}" ] || [ -z "${BANK}" ] || [ -z "${ACTUAL_ACCOUNT_ID}" ]; then
-    bashio::log.error "Required profile configuration missing"
-    bashio::log.error "Please configure profile_name, bank, and actual_account_id"
+# Get profiles array count
+PROFILES_COUNT=$(bashio::config 'profiles | length')
+if [ "${PROFILES_COUNT}" -eq 0 ]; then
+    bashio::log.error "At least one profile is required"
+    bashio::log.error "Please configure at least one profile in the profiles array"
     exit 1
 fi
 
@@ -73,34 +69,50 @@ bashio::log.info "Building .env file from configuration"
     fi
 } > "${ENV_FILE}"
 
-# Build and write profiles.json from individual configuration fields
+# Build and write profiles.json from profiles array
 PROFILES_FILE="${CONFIG_DIR}/profiles.json"
-bashio::log.info "Building profiles.json file from configuration"
+bashio::log.info "Building profiles.json file from ${PROFILES_COUNT} profile(s)"
 
-# Build the complete profiles.json using Node.js for proper JSON escaping
-PROFILE_NAME="${PROFILE_NAME}" BANK="${BANK}" ACTUAL_ACCOUNT_ID="${ACTUAL_ACCOUNT_ID}" PERSONNUMMER="${PERSONNUMMER}" ACCOUNT_NAME="${ACCOUNT_NAME}" node <<EOF > "${PROFILES_FILE}"
-const profileName = process.env.PROFILE_NAME;
-const bank = process.env.BANK;
-const actualAccountId = process.env.ACTUAL_ACCOUNT_ID;
-const personnummer = process.env.PERSONNUMMER;
-const accountName = process.env.ACCOUNT_NAME;
+# Get profiles array from bashio and pipe to Node.js
+bashio::config 'profiles' | node <<EOF > "${PROFILES_FILE}"
+// Read profiles from stdin (passed as JSON)
+let profilesData = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  profilesData += chunk;
+});
+process.stdin.on('end', () => {
+  try {
+    const profilesArray = JSON.parse(profilesData);
+    const profilesObject = {};
 
-// Build bankParams based on bank type
-const bankParams = {};
-if (bank === 'handelsbanken') {
-  if (personnummer) bankParams.personnummer = personnummer;
-  if (accountName) bankParams.accountName = accountName;
-}
+    profilesArray.forEach((profile, index) => {
+      // Validate required fields
+      if (!profile.profile_name || !profile.bank || !profile.actual_account_id) {
+        console.error(\`Profile at index \${index} is missing required fields (profile_name, bank, actual_account_id)\`);
+        process.exit(1);
+      }
 
-const profile = {
-  [profileName]: {
-    bank: bank,
-    bankParams: bankParams,
-    actualAccountId: actualAccountId
+      // Build bankParams based on bank type
+      const bankParams = {};
+      if (profile.bank === 'handelsbanken') {
+        if (profile.personnummer) bankParams.personnummer = profile.personnummer;
+        if (profile.account_name) bankParams.accountName = profile.account_name;
+      }
+
+      profilesObject[profile.profile_name] = {
+        bank: profile.bank,
+        bankParams: bankParams,
+        actualAccountId: profile.actual_account_id
+      };
+    });
+
+    console.log(JSON.stringify(profilesObject, null, 2));
+  } catch (error) {
+    console.error('Error building profiles.json:', error.message);
+    process.exit(1);
   }
-};
-
-console.log(JSON.stringify(profile, null, 2));
+});
 EOF
 
 # Validate JSON syntax

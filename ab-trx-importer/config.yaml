@@ -1,6 +1,6 @@
 name: AB Transaction Importer
 description: Import bank transactions into Actual Budget with web interface
-version: "1.1.0"
+version: "1.2.0"
 slug: ab-trx-importer
 url: https://github.com/rhorno/ab-trx-frontend
 arch:
@@ -27,11 +27,7 @@ options:
   actual_encryption_key: ""
   debug: false
   use_mock_services: false
-  profile_name: ""
-  bank: ""
-  actual_account_id: ""
-  personnummer: ""
-  account_name: ""
+  profiles: []
 schema:
   frontend_port: "port?"
   backend_port: "port?"
@@ -41,8 +37,9 @@ schema:
   actual_encryption_key: "str?"
   debug: "bool?"
   use_mock_services: "bool?"
-  profile_name: "str"
-  bank: "str"
-  actual_account_id: "str"
-  personnummer: "str?"
-  account_name: "str?"
+  profiles:
+    - profile_name: "str"
+      bank: "str"
+      actual_account_id: "str"
+      personnummer: "str?"
+      account_name: "str?"
