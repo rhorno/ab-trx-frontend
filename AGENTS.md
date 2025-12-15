@@ -69,6 +69,32 @@ cd frontend && npm run preview
 cd frontend && npm run lint
 ```
 
+### Versioning
+
+```bash
+# Create a new version tag (e.g., v0.1.0, v0.2.0, v1.0.0)
+git tag <version>
+
+# Push tags to remote repository
+git push origin <version>
+
+# List all tags
+git tag
+
+# Checkout a specific version
+git checkout <version>
+
+# Return to latest commit
+git checkout main
+```
+
+**Version Tagging Guidelines:**
+
+- Use semantic versioning (MAJOR.MINOR.PATCH, e.g., v0.1.0)
+- Create tags when the application reaches a stable, working state
+- Tags make it easier to downgrade or update to different versions
+- Always push tags to remote: `git push origin <version>`
+
 ## Project Structure
 
 - `frontend/` - React app using Vite, ESLint configured

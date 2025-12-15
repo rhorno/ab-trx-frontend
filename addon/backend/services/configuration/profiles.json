@@ -1,0 +1,26 @@
+{
+	"richard-handelsbanken": {
+		"bank": "handelsbanken",
+		"bankParams": {
+			"personnummer": "199003155257",
+			"accountName": "Lönekonto"
+		},
+		"actualAccountId": "6a610d1f-4412-4e49-b382-950ed3aceb64"
+	},
+	"felicia-handelsbanken": {
+		"bank": "handelsbanken",
+		"bankParams": {
+			"personnummer": "199701076284",
+			"accountName": "Lönekonto"
+		},
+		"actualAccountId": "78e9e809-23e9-4f85-8255-364347a80561"
+	},
+	"lägenhetskonto-handelsbanken": {
+		"bank": "handelsbanken",
+		"bankParams": {
+			"personnummer": "199003155257",
+			"accountName": "Lägenhetskonto"
+		},
+		"actualAccountId": "08f17698-c333-415c-8819-19655c650b43"
+	}
+}

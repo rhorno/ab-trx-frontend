@@ -1,0 +1,10 @@
+{
+  "example-profile": {
+    "bank": "handelsbanken",
+    "bankParams": {
+      "personnummer": "199003155257",
+      "accountName": "Lönekonto"
+    },
+    "actualAccountId": "6a610d1f-4412-4e49-b382-950ed3aceb64"
+  }
+}

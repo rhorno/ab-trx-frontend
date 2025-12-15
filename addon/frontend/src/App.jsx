@@ -106,17 +106,6 @@ function App() {
           return;
         }
 
-        if (data.type === "bankid-autostart") {
-          // Handle auto-start token from backend (for app-to-app flow)
-          setParsedData((prev) => ({
-            ...prev,
-            autoStartToken: data.data, // Auto-start token string
-            // Don't set success to false when auto-start token appears - we're waiting for auth
-            success: prev?.success ?? null,
-          }));
-          return;
-        }
-
         if (data.type === "stdout" || data.type === "stderr") {
           // Accumulate output
           accumulatedOutputRef.current += data.data;
@@ -267,12 +256,7 @@ function App() {
       </div>
 
       {/* Display QR Code if available */}
-      {parsedData?.qrCode && (
-        <QRCodeDisplay
-          qrCode={parsedData.qrCode}
-          autoStartToken={parsedData.autoStartToken}
-        />
-      )}
+      {parsedData?.qrCode && <QRCodeDisplay qrCode={parsedData.qrCode} />}
 
       {/* Display Import Status */}
       {parsedData && (

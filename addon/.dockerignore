@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+*.md
+.vscode
+.cursor
+*.log
+.env
+backend/data/
+frontend/dist/
+.DS_Store
+*.swp
+*.swo
+*~

@@ -9,7 +9,6 @@ export class AuthService {
   private readonly page: Page;
   private readonly verbose: boolean;
   private qrStartToken: string | null = null;
-  private autoStartToken: string | null = null;
   private logger: Logger;
   private serviceRef: any = null; // POC: Reference to service for QR code notifications
 
@@ -354,15 +353,12 @@ export class AuthService {
     this.page.on("response", async (response: any) => {
       const url = response.url();
 
-      // Look for common API endpoints that might return token data
-      // This includes endpoints for both QR flow (qrStartToken) and app-to-app flow (autoStartToken)
+      // Look for common API endpoints that might return QR token data
       if (
         url.includes("/api/qr") ||
         url.includes("/bankid") ||
         url.includes("/auth") ||
-        url.includes("/login") ||
-        url.includes("/mluri") ||
-        url.includes("/mbidqr")
+        url.includes("/login")
       ) {
         try {
           const contentType = response.headers()["content-type"] || "";
@@ -371,37 +367,29 @@ export class AuthService {
             const data = await response.json().catch(() => null);
 
             if (data) {
-              // Recursively search for tokens in the response
-              const findToken = (
-                obj: any,
-                targetKey: string
-              ): string | null => {
+              // Recursively search for qrStartToken or qrData in the response
+              const findToken = (obj: any): string | null => {
                 if (!obj || typeof obj !== "object") return null;
 
-                // Direct match for target key
-                if (obj[targetKey] && typeof obj[targetKey] === "string") {
-                  return obj[targetKey];
+                if (obj.qrStartToken && typeof obj.qrStartToken === "string") {
+                  return obj.qrStartToken;
                 }
 
-                // For qrStartToken, also check qrData and generic token
-                if (targetKey === "qrStartToken") {
-                  if (obj.qrData && typeof obj.qrData === "string") {
-                    return obj.qrData;
-                  }
-
-                  if (
-                    obj.token &&
-                    typeof obj.token === "string" &&
-                    obj.token.length > 20
-                  ) {
-                    return obj.token;
-                  }
+                if (obj.qrData && typeof obj.qrData === "string") {
+                  return obj.qrData;
                 }
 
-                // Recursively search nested objects
+                if (
+                  obj.token &&
+                  typeof obj.token === "string" &&
+                  obj.token.length > 20
+                ) {
+                  return obj.token;
+                }
+
                 for (const key in obj) {
                   if (typeof obj[key] === "object") {
-                    const result = findToken(obj[key], targetKey);
+                    const result = findToken(obj[key]);
                     if (result) return result;
                   }
                 }
@@ -409,41 +397,21 @@ export class AuthService {
                 return null;
               };
 
-              // Look for autoStartToken (for app-to-app flow)
-              const autoStartToken = findToken(data, "autoStartToken");
-              if (autoStartToken && !this.autoStartToken) {
+              const token = findToken(data);
+              if (token) {
                 this.log(
-                  `Found autoStartToken in API response: ${autoStartToken.substring(
+                  `Found QR token in API response: ${token.substring(
                     0,
                     10
-                  )}...${autoStartToken.substring(autoStartToken.length - 5)}`
+                  )}...${token.substring(token.length - 5)}`
                 );
-                this.autoStartToken = autoStartToken;
-                // Notify service layer
-                if (
-                  this.serviceRef &&
-                  typeof this.serviceRef.setAutoStartToken === "function"
-                ) {
-                  this.serviceRef.setAutoStartToken(autoStartToken);
-                }
-              }
-
-              // Look for qrStartToken (for QR code flow)
-              const qrToken = findToken(data, "qrStartToken");
-              if (qrToken && !this.qrStartToken) {
-                this.log(
-                  `Found QR token in API response: ${qrToken.substring(
-                    0,
-                    10
-                  )}...${qrToken.substring(qrToken.length - 5)}`
-                );
-                this.qrStartToken = qrToken;
+                this.qrStartToken = token;
                 // Notify service layer (frontend will render)
                 if (
                   this.serviceRef &&
                   typeof this.serviceRef.setQrToken === "function"
                 ) {
-                  this.serviceRef.setQrToken(qrToken);
+                  this.serviceRef.setQrToken(token);
                 }
               }
             }

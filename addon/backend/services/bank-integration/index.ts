@@ -30,7 +30,6 @@ export class BankIntegrationServiceImpl implements BankIntegrationService {
   private bankName: string = "";
   private authStatusCallbacks: Array<(status: AuthStatus) => void> = [];
   private currentQrToken: string | null = null;
-  private currentAutoStartToken: string | null = null;
   private qrCodePromise: {
     resolve: (value: QRCodeData) => void;
     reject: (error: Error) => void;
@@ -127,30 +126,6 @@ export class BankIntegrationServiceImpl implements BankIntegrationService {
   }
 
   /**
-   * Set auto-start token (called internally when app-to-app token is detected)
-   * POC: This is called by the bank client when autoStartToken is available
-   */
-  setAutoStartToken(token: string): void {
-    this.currentAutoStartToken = token;
-
-    // Notify callbacks with auto-start token
-    // Include autoStartToken in the status for API layer to stream
-    this.notifyAuthStatus({
-      status: "pending",
-      message: "BankID app-to-app token available",
-      timestamp: new Date().toISOString(),
-      autoStartToken: token, // Include autoStartToken in status
-    });
-  }
-
-  /**
-   * Get current auto-start token (for testing/debugging)
-   */
-  getAutoStartToken(): string | null {
-    return this.currentAutoStartToken;
-  }
-
-  /**
    * Fetch transactions from the bank
    *
    * POC: This wraps the existing bank client's fetchTransactions method.
@@ -221,7 +196,6 @@ export class BankIntegrationServiceImpl implements BankIntegrationService {
     this.bankClient = null;
     this.authStatusCallbacks = [];
     this.currentQrToken = null;
-    this.currentAutoStartToken = null;
     this.qrCodePromise = null;
   }
 }

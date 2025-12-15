@@ -1,4 +1,12 @@
 .env
+# Addon directory - track source files, ignore build artifacts
+addon/node_modules
+addon/backend/node_modules
+addon/backend/dist
+addon/frontend/node_modules
+addon/frontend/dist
+addon/backend/data/*.json
+!addon/backend/data/.gitkeep
 
 # Logs
 logs

@@ -154,7 +154,7 @@ async function handleImport(profileName, res) {
     );
 
     // 4. Set up authentication status listener
-    // This will catch QR codes, auto-start tokens, and auth status updates
+    // This will catch QR codes and auth status updates
     bankIntegrationService.onAuthStatus((status) => {
       // If status includes QR code data, stream it separately
       // Send only the token string - frontend will render the QR code
@@ -164,19 +164,6 @@ async function handleImport(profileName, res) {
             JSON.stringify({
               type: "qr-code",
               data: status.qrCode.token,
-            }) +
-            "\n\n"
-        );
-      }
-
-      // If status includes auto-start token, stream it separately
-      // Frontend will use this for app-to-app deep link
-      if (status.autoStartToken) {
-        res.write(
-          "data: " +
-            JSON.stringify({
-              type: "bankid-autostart",
-              data: status.autoStartToken,
             }) +
             "\n\n"
         );

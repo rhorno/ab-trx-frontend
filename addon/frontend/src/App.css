@@ -190,37 +190,6 @@
   font-size: 12px;
 }
 
-.qr-button-container {
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: center;
-}
-
-.qr-open-bankid-button {
-  padding: 14px 32px;
-  min-height: 48px;
-  font-size: 16px;
-  font-weight: 600;
-  color: white;
-  background-color: #0066cc;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 102, 204, 0.3);
-  -webkit-tap-highlight-color: transparent;
-}
-
-.qr-open-bankid-button:hover {
-  background-color: #0052a3;
-  box-shadow: 0 4px 8px rgba(0, 102, 204, 0.4);
-  transform: translateY(-1px);
-}
-
-.qr-open-bankid-button:active {
-  transform: translateY(0);
-}
-
 /* Import Status */
 .status-container {
   margin-bottom: 24px;

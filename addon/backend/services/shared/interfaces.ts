@@ -8,10 +8,7 @@
 
 import { UserConfig, Profile } from "../configuration/config-loader.js";
 import { Transaction } from "./types.js";
-import {
-  ActualBudgetConfig,
-  ImportResult,
-} from "../actual-budget/connector.js";
+import { ActualBudgetConfig, ImportResult } from "../actual-budget/connector.js";
 import { BankParams } from "../bank-integration/bank-client.js";
 
 /**
@@ -31,7 +28,6 @@ export interface AuthStatus {
   message?: string;
   timestamp?: string;
   qrCode?: QRCodeData; // POC: Include QR code data in status for streaming
-  autoStartToken?: string; // POC: Include auto-start token for app-to-app flow
 }
 
 /**
@@ -185,3 +181,4 @@ export type {
   ImportResult,
   BankParams,
 };
+

@@ -1,0 +1,28 @@
+name: AB Transaction Importer
+description: Import bank transactions into Actual Budget with web interface
+version: "1.0.0"
+slug: ab-trx-importer
+url: https://github.com/yourusername/ab-trx-importer-frontend
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+init: false
+startup: application
+boot: auto
+ports:
+  "5173/tcp": 5173
+  "8000/tcp": 8000
+ports_description:
+  "5173/tcp": "Frontend web interface"
+  "8000/tcp": "Backend API"
+# Configuration files should be placed in /data directory
+# Users can access this via the add-on's data directory
+options:
+  frontend_port: 5173
+  backend_port: 8000
+schema:
+  frontend_port: "port?"
+  backend_port: "port?"
