@@ -1,4 +1,3 @@
 name: AB Transaction Importer Repository
-url: https://codeberg.org/rhorno/ab-trx-importer-frontend
-maintainer: Your Name <your.email@example.com>
-
+url: "[email protected]:rhorno/ab-trx-importer-frontend.git"
+maintainer: "Your Name <your.email@example.com>"
