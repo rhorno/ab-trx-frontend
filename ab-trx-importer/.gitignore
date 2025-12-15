@@ -1,4 +1,6 @@
-# Temporary build copies (created by prepare-build.sh)
-backend/
-frontend/
+# Build artifacts only (keep source code)
+backend/node_modules/
+backend/dist/
+frontend/node_modules/
+frontend/dist/
 

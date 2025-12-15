@@ -17,7 +17,7 @@ RUN \
 # Set working directory
 WORKDIR /app
 
-# Copy package files (symlinks created by prepare-build.sh)
+# Copy package files
 COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
 
@@ -25,7 +25,7 @@ COPY frontend/package*.json ./frontend/
 WORKDIR /app/backend
 RUN npm ci
 
-# Copy backend source code and TypeScript config (symlinks created by prepare-build.sh)
+# Copy backend source code and TypeScript config
 WORKDIR /app
 COPY backend/tsconfig.json ./backend/
 COPY backend/services/ ./backend/services/
@@ -39,7 +39,7 @@ RUN npm run build
 # TypeScript compiles services/ to dist/services/, keep api/ as-is (already JS)
 RUN rm -rf services && mv dist/services services && rm -rf dist
 
-# Copy frontend source code (symlinks created by prepare-build.sh)
+# Copy frontend source code
 WORKDIR /app
 COPY frontend/ ./frontend/
 
