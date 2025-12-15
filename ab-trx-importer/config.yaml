@@ -21,27 +21,31 @@ ports_description:
 options:
   frontend_port: 5173
   backend_port: 8000
-  env_content: |
-    # Actual Budget Configuration
-    ACTUAL_SERVER_URL=https://your-actual-budget-server.com
-    ACTUAL_PASSWORD=your-password
-    ACTUAL_SYNC_ID=your-sync-id
-
-    # Optional: Encryption key if using encrypted sync
-    # ACTUAL_ENCRYPTION_KEY=your-encryption-key
-  profiles_json: |
-    {
-      "example-profile": {
-        "bank": "handelsbanken",
-        "bankParams": {
-          "personnummer": "199003155257",
-          "accountName": "Lönekonto"
-        },
-        "actualAccountId": "6a610d1f-4412-4e49-b382-950ed3aceb64"
-      }
-    }
+  # Actual Budget Configuration
+  actual_server_url: ""
+  actual_password: ""
+  actual_sync_id: ""
+  actual_encryption_key: ""
+  debug: false
+  use_mock_services: false
+  # Profile Configuration
+  profile_name: ""
+  bank: ""
+  actual_account_id: ""
+  # Handelsbanken specific parameters
+  personnummer: ""
+  account_name: ""
 schema:
   frontend_port: "port?"
   backend_port: "port?"
-  env_content: "str"
-  profiles_json: "str"
+  actual_server_url: "str"
+  actual_password: "str"
+  actual_sync_id: "str"
+  actual_encryption_key: "str?"
+  debug: "bool?"
+  use_mock_services: "bool?"
+  profile_name: "str"
+  bank: "str"
+  actual_account_id: "str"
+  personnummer: "str?"
+  account_name: "str?"

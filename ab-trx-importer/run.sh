@@ -18,8 +18,31 @@ export NODE_ENV=production
 export PORT=${BACKEND_PORT}
 
 # Get configuration values from addon config
-ENV_CONTENT=$(bashio::config 'env_content')
-PROFILES_JSON=$(bashio::config 'profiles_json')
+ACTUAL_SERVER_URL=$(bashio::config 'actual_server_url')
+ACTUAL_PASSWORD=$(bashio::config 'actual_password')
+ACTUAL_SYNC_ID=$(bashio::config 'actual_sync_id')
+ACTUAL_ENCRYPTION_KEY=$(bashio::config 'actual_encryption_key')
+DEBUG=$(bashio::config 'debug')
+USE_MOCK_SERVICES=$(bashio::config 'use_mock_services')
+
+PROFILE_NAME=$(bashio::config 'profile_name')
+BANK=$(bashio::config 'bank')
+ACTUAL_ACCOUNT_ID=$(bashio::config 'actual_account_id')
+PERSONNUMMER=$(bashio::config 'personnummer')
+ACCOUNT_NAME=$(bashio::config 'account_name')
+
+# Validate required fields
+if [ -z "${ACTUAL_SERVER_URL}" ] || [ -z "${ACTUAL_PASSWORD}" ] || [ -z "${ACTUAL_SYNC_ID}" ]; then
+    bashio::log.error "Required Actual Budget configuration missing"
+    bashio::log.error "Please configure actual_server_url, actual_password, and actual_sync_id"
+    exit 1
+fi
+
+if [ -z "${PROFILE_NAME}" ] || [ -z "${BANK}" ] || [ -z "${ACTUAL_ACCOUNT_ID}" ]; then
+    bashio::log.error "Required profile configuration missing"
+    bashio::log.error "Please configure profile_name, bank, and actual_account_id"
+    exit 1
+fi
 
 # Use /data for add-on persistent data
 CONFIG_DIR="/data"
@@ -28,31 +51,61 @@ APP_ROOT="/app"
 # Ensure config directory exists
 mkdir -p "${CONFIG_DIR}"
 
-# Write .env file from configuration
+# Build and write .env file from individual configuration fields
 ENV_FILE="${CONFIG_DIR}/.env"
-if [ -n "${ENV_CONTENT}" ]; then
-    bashio::log.info "Writing .env file from configuration"
-    echo "${ENV_CONTENT}" > "${ENV_FILE}"
-else
-    bashio::log.error "env_content is required in addon configuration"
-    bashio::log.error "Please configure the .env content in the addon settings"
-    exit 1
-fi
+bashio::log.info "Building .env file from configuration"
+{
+    echo "# Actual Budget Configuration"
+    echo "ACTUAL_SERVER_URL=${ACTUAL_SERVER_URL}"
+    echo "ACTUAL_PASSWORD=${ACTUAL_PASSWORD}"
+    echo "ACTUAL_SYNC_ID=${ACTUAL_SYNC_ID}"
 
-# Write profiles.json file from configuration
-PROFILES_FILE="${CONFIG_DIR}/profiles.json"
-if [ -n "${PROFILES_JSON}" ]; then
-    bashio::log.info "Writing profiles.json file from configuration"
-    echo "${PROFILES_JSON}" > "${PROFILES_FILE}"
-
-    # Validate JSON syntax using Node.js
-    if ! node -e "JSON.parse(require('fs').readFileSync('${PROFILES_FILE}', 'utf8'))" > /dev/null 2>&1; then
-        bashio::log.error "profiles_json contains invalid JSON"
-        exit 1
+    if [ -n "${ACTUAL_ENCRYPTION_KEY}" ]; then
+        echo "ACTUAL_ENCRYPTION_KEY=${ACTUAL_ENCRYPTION_KEY}"
     fi
-else
-    bashio::log.error "profiles_json is required in addon configuration"
-    bashio::log.error "Please configure the profiles.json content in the addon settings"
+
+    if [ "${DEBUG}" = "true" ]; then
+        echo "DEBUG=true"
+    fi
+
+    if [ "${USE_MOCK_SERVICES}" = "true" ]; then
+        echo "USE_MOCK_SERVICES=true"
+    fi
+} > "${ENV_FILE}"
+
+# Build and write profiles.json from individual configuration fields
+PROFILES_FILE="${CONFIG_DIR}/profiles.json"
+bashio::log.info "Building profiles.json file from configuration"
+
+# Build the complete profiles.json using Node.js for proper JSON escaping
+PROFILE_NAME="${PROFILE_NAME}" BANK="${BANK}" ACTUAL_ACCOUNT_ID="${ACTUAL_ACCOUNT_ID}" PERSONNUMMER="${PERSONNUMMER}" ACCOUNT_NAME="${ACCOUNT_NAME}" node <<EOF > "${PROFILES_FILE}"
+const profileName = process.env.PROFILE_NAME;
+const bank = process.env.BANK;
+const actualAccountId = process.env.ACTUAL_ACCOUNT_ID;
+const personnummer = process.env.PERSONNUMMER;
+const accountName = process.env.ACCOUNT_NAME;
+
+// Build bankParams based on bank type
+const bankParams = {};
+if (bank === 'handelsbanken') {
+  if (personnummer) bankParams.personnummer = personnummer;
+  if (accountName) bankParams.accountName = accountName;
+}
+
+const profile = {
+  [profileName]: {
+    bank: bank,
+    bankParams: bankParams,
+    actualAccountId: actualAccountId
+  }
+};
+
+console.log(JSON.stringify(profile, null, 2));
+EOF
+
+# Validate JSON syntax
+if ! node -e "JSON.parse(require('fs').readFileSync('${PROFILES_FILE}', 'utf8'))" > /dev/null 2>&1; then
+    bashio::log.error "Failed to create valid profiles.json"
     exit 1
 fi
 
