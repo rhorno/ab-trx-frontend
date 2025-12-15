@@ -33,7 +33,7 @@ app.get("/api/profiles", (req, res) => {
 
 // SSE endpoint for streaming import (now uses services instead of CLI)
 app.get("/api/import", (req, res) => {
-  const { profile } = req.query;
+  const { profile, authMode } = req.query;
 
   if (!profile || typeof profile !== "string" || profile.trim() === "") {
     return res.status(400).json({
@@ -58,7 +58,10 @@ app.get("/api/import", (req, res) => {
   });
 
   // Call service-based import handler
-  handleImport(profile.trim(), res).catch((error) => {
+  // Pass authMode if provided (for Handelsbanken profiles)
+  const effectiveAuthMode =
+    authMode && typeof authMode === "string" ? authMode.trim() : null;
+  handleImport(profile.trim(), res, effectiveAuthMode).catch((error) => {
     // Final error handler if handleImport fails catastrophically
     if (!res.headersSent) {
       res.write(

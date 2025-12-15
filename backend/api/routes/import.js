@@ -19,8 +19,9 @@ const DRY_RUN =
  * Handle import request with SSE streaming
  * @param {string} profileName - Profile name to use for import
  * @param {Object} res - Express response object (configured for SSE)
+ * @param {string|null} authMode - Authentication mode: "same-device" or "other-device" (for Handelsbanken)
  */
-async function handleImport(profileName, res) {
+async function handleImport(profileName, res, authMode = null) {
   let configService, actualBudgetService, bankIntegrationService;
   let actualBudgetConnected = false;
   let bankInitialized = false;
@@ -140,6 +141,12 @@ async function handleImport(profileName, res) {
     // Extract bank params (everything except 'name')
     const bankParams = { ...config.bank };
     delete bankParams.name;
+
+    // Add authMode to bankParams for Handelsbanken profiles
+    // authMode: "same-device" (app-to-app) or "other-device" (QR code)
+    if (config.bank.name === "handelsbanken" && authMode) {
+      bankParams.authMode = authMode;
+    }
 
     await bankIntegrationService.initialize(config.bank.name, bankParams);
     bankInitialized = true;

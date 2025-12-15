@@ -69,12 +69,25 @@ export default class HandelsbankenClient extends BankClient {
       slowMo: this.verbose ? 100 : 0, // Slow down operations in verbose mode
     });
 
+    // Create browser context with mobile emulation
+    // IMPORTANT: Configure mobile emulation BEFORE creating any pages
+    // This ensures Handelsbanken detects us as mobile and shows app-to-app option
+    const context = await this.browser.newContext({
+      viewport: { width: 375, height: 667 },
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+    });
+
     // Initialize page and services
-    const page = await this.browser.newPage();
+    const page = await context.newPage();
     this.page = page;
     this.initServices(page);
 
     try {
+      // Navigate to a blank page first to ensure mobile emulation is active
+      // This ensures Handelsbanken detects mobile user agent from the start
+      this.log("Initializing mobile emulation...");
+      await page.goto("about:blank");
+
       // Setup API request interception for logging and authentication detection
       if (this.apiService) {
         this.apiService.setupApiInterception();

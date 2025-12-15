@@ -9,6 +9,9 @@ function App() {
   const [profilesLoading, setProfilesLoading] = useState(true);
   const [profilesError, setProfilesError] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [selectedProfileData, setSelectedProfileData] = useState(null);
+  const [showAuthModeModal, setShowAuthModeModal] = useState(false);
+  const [authMode, setAuthMode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState("");
   const [error, setError] = useState(null);
@@ -58,14 +61,27 @@ function App() {
     };
   }, []);
 
-  const handleImport = useCallback(() => {
-    console.log("handleImport called, profile:", selectedProfile);
+  // Check if selected profile is Handelsbanken
+  const isHandelsbankenProfile = selectedProfileData?.bank === "handelsbanken";
+
+  // Handle profile selection
+  const handleProfileSelect = (profileName) => {
+    const profile = profiles.find((p) => p.name === profileName);
+    setSelectedProfile(profileName);
+    setSelectedProfileData(profile);
+    setAuthMode(null); // Reset auth mode when profile changes
+  };
+
+  // Start the actual import process
+  const startImport = useCallback((overrideAuthMode = null) => {
     if (!selectedProfile || !selectedProfile.trim()) {
       setError("Please select a profile first");
       return;
     }
 
     const profileName = selectedProfile;
+    // Use overrideAuthMode if provided, otherwise use state authMode
+    const effectiveAuthMode = overrideAuthMode !== null ? overrideAuthMode : authMode;
 
     // Close existing connection if any
     if (eventSource) {
@@ -80,7 +96,11 @@ function App() {
     accumulatedOutputRef.current = "";
 
     // Create EventSource for Server-Sent Events
-    const url = `/api/import?profile=${encodeURIComponent(profileName.trim())}`;
+    // Include authMode for Handelsbanken profiles
+    let url = `/api/import?profile=${encodeURIComponent(profileName.trim())}`;
+    if (isHandelsbankenProfile && effectiveAuthMode) {
+      url += `&authMode=${encodeURIComponent(effectiveAuthMode)}`;
+    }
     console.log("Creating EventSource with URL:", url);
     const es = new EventSource(url);
     console.log("EventSource created:", es);
@@ -209,7 +229,25 @@ function App() {
     };
 
     setEventSource(es);
-  }, [eventSource, selectedProfile]);
+    setShowAuthModeModal(false); // Close modal when import starts
+  }, [eventSource, selectedProfile, isHandelsbankenProfile, authMode]);
+
+  // Handle import button click
+  const handleImportClick = useCallback(() => {
+    if (!selectedProfile || !selectedProfile.trim()) {
+      setError("Please select a profile first");
+      return;
+    }
+
+    // For Handelsbanken profiles, show auth mode selection first
+    if (isHandelsbankenProfile && !authMode) {
+      setShowAuthModeModal(true);
+      return;
+    }
+
+    // For non-Handelsbanken or when authMode is already selected, proceed
+    startImport();
+  }, [selectedProfile, isHandelsbankenProfile, authMode, startImport]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -247,7 +285,7 @@ function App() {
                   className={`profile-item ${
                     selectedProfile === profile.name ? "selected" : ""
                   }`}
-                  onClick={() => setSelectedProfile(profile.name)}
+                  onClick={() => handleProfileSelect(profile.name)}
                 >
                   <span className="profile-name">{profile.name}</span>
                 </div>
@@ -255,7 +293,7 @@ function App() {
             </div>
             <div className="import-section">
               <button
-                onClick={handleImport}
+                onClick={handleImportClick}
                 disabled={loading || !selectedProfile}
                 className="import-button"
               >
@@ -265,6 +303,58 @@ function App() {
           </>
         )}
       </div>
+
+      {/* Auth Mode Selection Modal for Handelsbanken */}
+      {showAuthModeModal && (
+        <div className="modal-overlay" onClick={() => setShowAuthModeModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2 className="modal-title">Choose BankID Authentication Method</h2>
+            <p className="modal-description">
+              How do you want to authenticate with BankID?
+            </p>
+            <div className="auth-mode-options">
+              <button
+                className={`auth-mode-button ${
+                  authMode === "same-device" ? "selected" : ""
+                }`}
+                onClick={() => {
+                  const newAuthMode = "same-device";
+                  setAuthMode(newAuthMode);
+                  setShowAuthModeModal(false);
+                  startImport(newAuthMode);
+                }}
+              >
+                <div className="auth-mode-title">Open BankID App</div>
+                <div className="auth-mode-description">
+                  Open BankID app on this device (recommended on mobile)
+                </div>
+              </button>
+              <button
+                className={`auth-mode-button ${
+                  authMode === "other-device" ? "selected" : ""
+                }`}
+                onClick={() => {
+                  const newAuthMode = "other-device";
+                  setAuthMode(newAuthMode);
+                  setShowAuthModeModal(false);
+                  startImport(newAuthMode);
+                }}
+              >
+                <div className="auth-mode-title">Scan QR Code</div>
+                <div className="auth-mode-description">
+                  Show QR code to scan from another device
+                </div>
+              </button>
+            </div>
+            <button
+              className="modal-close-button"
+              onClick={() => setShowAuthModeModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Display QR Code if available */}
       {parsedData?.qrCode && (
