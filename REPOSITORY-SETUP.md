@@ -7,9 +7,9 @@ The addon has been configured for repository-based updates. Here's what was done
 ✅ **Repository structure created:**
 
 - `repository.yaml` at repository root
-- `addon/` directory with all addon files (now tracked in git)
+- `config.yaml`, `Dockerfile`, `build.yaml`, `run.sh` at repository root
+- Uses existing `backend/` and `frontend/` directories (no duplication)
 - `config.yaml` updated (removed `image` field for source-based builds)
-- `.gitignore` updated to track addon source files
 
 ✅ **Documentation created:**
 
@@ -62,19 +62,19 @@ git push origin main
 
 Before starting, create configuration files:
 
-- `/config/addon_configs/ab-trx-importer/.env` (copy from `addon/env.example`)
-- `/config/addon_configs/ab-trx-importer/profiles.json` (copy from `addon/profiles.json.example`)
+- `/config/addon_configs/ab-trx-importer/.env` (copy from `env.example` in repo root)
+- `/config/addon_configs/ab-trx-importer/profiles.json` (copy from `profiles.json.example` in repo root)
 
 See `ab-trx-importer/INSTALLATION.md` for detailed configuration steps.
 
 ## Updating the Addon
 
-**See `ab-trx-importer/UPDATE-INSTRUCTIONS.md` for the complete workflow.**
+**See `UPDATE-INSTRUCTIONS.md` for the complete workflow.**
 
 Quick process:
 
 1. Make code changes
-2. Bump version in `addon/config.yaml`
+2. Bump version in `config.yaml`
 3. Commit and push: `git add . && git commit -m "..." && git push`
 4. In Home Assistant: Click **Update** on the addon
 
@@ -83,15 +83,14 @@ Quick process:
 ```
 repository-root/
 ├── repository.yaml          # Repository metadata (update with your info)
-├── addon/                   # Addon directory
-│   ├── config.yaml         # Addon configuration
-│   ├── Dockerfile         # Container build file
-│   ├── build.yaml         # Build configuration
-│   ├── run.sh             # Startup script
-│   ├── backend/           # Backend code
-│   ├── frontend/          # Frontend code
-│   ├── INSTALLATION.md    # Installation guide
-│   └── UPDATE-INSTRUCTIONS.md  # Update workflow guide
+├── config.yaml             # Addon configuration
+├── Dockerfile              # Container build file
+├── build.yaml              # Build configuration
+├── run.sh                  # Startup script
+├── backend/                # Backend code (existing, no duplication)
+├── frontend/               # Frontend code (existing, no duplication)
+├── INSTALLATION.md         # Installation guide
+└── UPDATE-INSTRUCTIONS.md  # Update workflow guide
 └── ... (other project files)
 ```
 
@@ -107,7 +106,7 @@ repository-root/
 If Home Assistant doesn't see the addon:
 
 1. Verify `repository.yaml` exists at repository root
-2. Verify `addon/config.yaml` exists
+2. Verify `config.yaml` exists at repository root
 3. Check repository URL is correct in Home Assistant
 4. Click "Check for updates" in Home Assistant
 

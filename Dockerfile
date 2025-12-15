@@ -17,10 +17,9 @@ RUN \
 # Set working directory
 WORKDIR /app
 
-# Copy package files from parent directories
-# Note: These will be symlinks created by setup script, or we build from repo root
-COPY ../backend/package*.json ./backend/
-COPY ../frontend/package*.json ./frontend/
+# Copy package files
+COPY backend/package*.json ./backend/
+COPY frontend/package*.json ./frontend/
 
 # Install backend dependencies (including dev for TypeScript build)
 WORKDIR /app/backend

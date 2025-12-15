@@ -50,8 +50,8 @@ Before starting, create configuration files in the add-on's data directory.
 
 1. Open **File editor** add-on
 2. Navigate to `/config/addon_configs/ab-trx-importer/`
-3. Create `.env` file (copy from `env.example` in the repository's `ab-trx-importer/` directory)
-4. Create `profiles.json` file (copy from `profiles.json.example` in the repository's `ab-trx-importer/` directory)
+3. Create `.env` file (copy from `env.example` in the repository root)
+4. Create `profiles.json` file (copy from `profiles.json.example` in the repository root)
 
 **Via SSH:**
 
@@ -60,12 +60,12 @@ Before starting, create configuration files in the add-on's data directory.
 cd /config/addon_configs/ab-trx-importer/
 
 # Create .env (you'll need to copy content from repository)
-# The env.example file is in your repository at: ab-trx-importer/env.example
+# The env.example file is in your repository root
 nano .env
 # Paste and edit the content from env.example
 
 # Create profiles.json (you'll need to copy content from repository)
-# The profiles.json.example file is in your repository at: ab-trx-importer/profiles.json.example
+# The profiles.json.example file is in your repository root
 nano profiles.json
 # Paste and edit the content from profiles.json.example
 ```
@@ -89,7 +89,7 @@ mkdir -p /config/addon_configs/ab-trx-importer/
 Quick summary:
 
 1. Make code changes in your repository
-2. Bump version in `ab-trx-importer/config.yaml`
+2. Bump version in `config.yaml`
 3. Commit and push to GitHub
 4. In Home Assistant: **Settings** → **Add-ons** → **AB Transaction Importer** → **Update**
 

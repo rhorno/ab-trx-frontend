@@ -10,11 +10,11 @@ Use this process every time you want to push changes to your Home Assistant inst
 
 Edit files in the repository as needed:
 
-- `addon/backend/` - Backend code
-- `addon/frontend/` - Frontend code
-- `addon/run.sh` - Startup script
-- `addon/Dockerfile` - Container build
-- Any other addon files
+- `backend/` - Backend code
+- `frontend/` - Frontend code
+- `run.sh` - Startup script
+- `Dockerfile` - Container build
+- Any other project files
 
 ### 2. (Optional) Create a Safety Checkpoint
 
@@ -35,7 +35,7 @@ This lets you easily revert if something breaks.
 
 **IMPORTANT:** Home Assistant only detects updates when the version changes.
 
-Edit `addon/config.yaml`:
+Edit `config.yaml`:
 
 ```yaml
 version: "1.0.1" # Increment from previous version (e.g., 1.0.0 → 1.0.1)
@@ -107,7 +107,7 @@ git revert <older-bad-commit>
 
 3. **Bump version again** (must be higher than broken version):
 
-Edit `addon/config.yaml`:
+Edit `config.yaml`:
 
 ```yaml
 version: "1.0.2" # Broken was 1.0.1, this reverts to good code
@@ -146,7 +146,7 @@ git reset --hard v1.0.0-stable
 
 3. **Bump version to a new number:**
 
-Edit `addon/config.yaml`:
+Edit `config.yaml`:
 
 ```yaml
 version: "1.0.3" # Must be higher than broken version
@@ -170,7 +170,7 @@ git push origin main --force  # Only if you reset main branch
 
 ```bash
 # View version in config.yaml
-grep "version:" addon/config.yaml
+grep "version:" config.yaml
 
 # Or check installed version in Home Assistant UI
 ```
@@ -241,7 +241,7 @@ git diff  # See uncommitted changes
 git status
 git diff
 
-# 3. Bump version in addon/config.yaml
+# 3. Bump version in config.yaml
 # Edit: version: "1.0.0" → version: "1.0.1"
 
 # 4. Commit and push
