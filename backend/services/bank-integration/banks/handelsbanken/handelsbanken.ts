@@ -256,6 +256,15 @@ export default class HandelsbankenClient extends BankClient {
     this.browser = await chromium.launch({
       headless: !this.verbose, // Show browser in verbose mode
       slowMo: this.verbose ? 100 : 0, // Slow down operations in verbose mode
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--disable-setuid-sandbox",
+        "--disable-web-security",
+        "--disable-features=IsolateOrigins,site-per-process",
+      ],
     });
     this.page = await this.browser.newPage();
 

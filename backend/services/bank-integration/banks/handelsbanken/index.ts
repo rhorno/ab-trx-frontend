@@ -76,17 +76,30 @@ export default class HandelsbankenClient extends BankClient {
       this.browser = await chromium.launch({
         headless: !this.verbose, // Show browser in verbose mode
         slowMo: this.verbose ? 100 : 0, // Slow down operations in verbose mode
+        args: [
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--disable-software-rasterizer",
+          "--disable-setuid-sandbox",
+          "--disable-web-security",
+          "--disable-features=IsolateOrigins,site-per-process",
+        ],
       });
     } catch (error: any) {
       const errorMessage = error?.message || String(error);
-      if (errorMessage.includes("missing dependencies") || errorMessage.includes("Host system is missing dependencies")) {
+      if (
+        errorMessage.includes("missing dependencies") ||
+        errorMessage.includes("Host system is missing dependencies")
+      ) {
         throw new Error(
           "Playwright browser dependencies are missing. " +
-          "In Home Assistant, ensure the addon has proper system dependencies installed. " +
-          "The Dockerfile should install: libglib2.0-0, libnss3, libnspr4, libdbus-1-3, " +
-          "libatk1.0-0, libatspi2.0-0, libx11-6, libxcomposite1, libxdamage1, libxext6, " +
-          "libxfixes3, libxrandr2, libgbm1, libxcb1, libxkbcommon0, libasound2. " +
-          "Original error: " + errorMessage
+            "In Home Assistant, ensure the addon has proper system dependencies installed. " +
+            "The Dockerfile should install: libglib2.0-0, libnss3, libnspr4, libdbus-1-3, " +
+            "libatk1.0-0, libatspi2.0-0, libx11-6, libxcomposite1, libxdamage1, libxext6, " +
+            "libxfixes3, libxrandr2, libgbm1, libxcb1, libxkbcommon0, libasound2. " +
+            "Original error: " +
+            errorMessage
         );
       }
       throw error;
@@ -97,7 +110,8 @@ export default class HandelsbankenClient extends BankClient {
     // This ensures Handelsbanken detects us as mobile and shows app-to-app option
     const context = await this.browser.newContext({
       viewport: { width: 375, height: 667 },
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
     });
 
     // Initialize page and services
