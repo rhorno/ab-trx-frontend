@@ -9,25 +9,32 @@ RUN \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        nodejs \
-        curl \
-        ca-certificates \
-        libglib2.0-0 \
-        libnss3 \
-        libnspr4 \
-        libdbus-1-3 \
-        libatk1.0-0 \
-        libatspi2.0-0 \
-        libx11-6 \
-        libxcomposite1 \
-        libxdamage1 \
-        libxext6 \
-        libxfixes3 \
-        libxrandr2 \
-        libgbm1 \
-        libxcb1 \
-        libxkbcommon0 \
-        libasound2 \
+    nodejs \
+    curl \
+    ca-certificates \
+    libglib2.0-0 \
+    libnss3 \
+    libnspr4 \
+    libdbus-1-3 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libx11-6 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libxcb1 \
+    libxkbcommon0 \
+    libasound2 \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    libdrm2 \
+    libxss1 \
+    libatk-bridge2.0-0 \
+    libx11-xcb1 \
+    libpangocairo-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
