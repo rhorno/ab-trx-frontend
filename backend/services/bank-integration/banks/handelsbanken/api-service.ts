@@ -317,7 +317,6 @@ export class HandelsbankenApiService {
     }
   }
 
-
   /**
    * Fetch transactions from the API
    */
@@ -442,7 +441,6 @@ export class HandelsbankenApiService {
       );
     }
   }
-
 
   /**
    * Save transactions to a file for future development/testing
