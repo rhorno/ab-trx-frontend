@@ -1,6 +1,6 @@
 name: AB Transaction Importer
 description: Import bank transactions into Actual Budget with web interface
-version: "1.12.0"
+version: "1.13.0"
 slug: ab-trx-importer
 url: https://github.com/rhorno/ab-trx-frontend
 arch:

@@ -1,0 +1,61 @@
+# Node modules (exclude all)
+../node_modules/
+../**/node_modules/
+node_modules/
+**/node_modules/
+
+# Build artifacts (allow during build, exclude final dist)
+# Note: dist/ is needed during TypeScript compilation
+*.log
+
+# IDE files
+../.vscode/
+../.idea/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+../.DS_Store
+
+# Git
+../.git/
+.git/
+../.gitignore
+.gitignore
+
+# Documentation (exclude most)
+../*.md
+*.md
+!README.md
+!../README.md
+
+# Test files
+../**/*.test.js
+../**/*.spec.js
+../**/__tests__/
+../**/test/
+*.test.js
+*.spec.js
+__tests__/
+test/
+
+# Environment files
+../.env
+../.env.local
+.env
+.env.local
+
+# Data files (transaction data)
+../**/data/*.json
+../backend/data/*.json
+!../**/data/.gitkeep
+
+# Explicitly include required directories from parent
+!../backend/
+!../frontend/
+

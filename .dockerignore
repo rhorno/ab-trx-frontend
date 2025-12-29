@@ -1,48 +1,8 @@
-# Node modules (exclude all)
+# Minimal exclusions - only exclude what's definitely not needed
 node_modules/
-**/node_modules/
-
-# Build artifacts
-dist/
-**/dist/
 *.log
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Git
 .git/
-.gitignore
-
-# Documentation (exclude most, but allow README.md if needed)
-*.md
-!README.md
-
-# Test files
-*.test.js
-*.spec.js
-__tests__/
-test/
-
-# Environment files
+.DS_Store
 .env
 .env.local
-
-# Data files (transaction data, but allow config examples)
-**/data/*.json
-!**/data/.gitkeep
-
-# Allow required config files
-!**/tsconfig.json
-!**/package.json
-!**/package-lock.json
-!profiles.json.example
 
