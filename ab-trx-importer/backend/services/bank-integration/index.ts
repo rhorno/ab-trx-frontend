@@ -144,6 +144,18 @@ export class BankIntegrationServiceImpl implements BankIntegrationService {
   }
 
   /**
+   * Notify authentication error (called internally when QR expires or auth fails)
+   * POC: This is called by the bank client when authentication encounters an error
+   */
+  notifyAuthError(message: string): void {
+    this.notifyAuthStatus({
+      status: "expired",
+      message: message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
    * Get current auto-start token (for testing/debugging)
    */
   getAutoStartToken(): string | null {

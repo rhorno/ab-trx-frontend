@@ -1,0 +1,85 @@
+{
+  "account": {
+    "accountNumber": "840716451",
+    "accountName": "Lönekonto",
+    "chosenName": "Lönekonto",
+    "system": "INLÅ",
+    "status": "N"
+  },
+  "dateRange": {
+    "startDate": "2025-12-28",
+    "endDate": "2025-12-29"
+  },
+  "transactions": [
+    {
+      "date": "2025-12-26",
+      "amount": -57844,
+      "payee_name": "St1 B}lsta",
+      "notes": "",
+      "imported_id": "2025-12-26-1-2025-12-29-18.54.49.380810"
+    },
+    {
+      "date": "2025-12-24",
+      "amount": -9800,
+      "payee_name": "CIRCLE K SOLLE",
+      "notes": "",
+      "imported_id": "2025-12-24-1-2025-12-29-18.54.49.380448"
+    },
+    {
+      "date": "2025-12-23",
+      "amount": -54434,
+      "payee_name": "ICA KVANTUM VA",
+      "notes": "",
+      "imported_id": "2025-12-23-1-2025-12-29-18.54.49.380056"
+    },
+    {
+      "date": "2025-12-23",
+      "amount": -69000,
+      "payee_name": "BALAYAGE STOCK",
+      "notes": "",
+      "imported_id": "2025-12-23-1-2025-12-29-18.54.49.378991"
+    },
+    {
+      "date": "2025-12-29",
+      "amount": -9000000,
+      "payee_name": "Lysa Spar",
+      "notes": "",
+      "imported_id": "2025-12-29-1-2025-12-29-04.56.28.644196"
+    },
+    {
+      "date": "2025-12-29",
+      "amount": -7365000,
+      "payee_name": "Lysa Spar",
+      "notes": "",
+      "imported_id": "2025-12-29-1-2025-12-29-04.56.28.643960"
+    },
+    {
+      "date": "2025-12-29",
+      "amount": -1290990,
+      "payee_name": "K* Klarna",
+      "notes": "",
+      "imported_id": "2025-12-29-1-2025-12-29-04.56.28.643408"
+    },
+    {
+      "date": "2025-12-29",
+      "amount": -16000,
+      "payee_name": "UNION.AKASSA",
+      "notes": "",
+      "imported_id": "2025-12-29-1-2025-12-29-04.56.28.639321"
+    },
+    {
+      "date": "2025-12-26",
+      "amount": -20000000,
+      "payee_name": "Överf Mobil",
+      "notes": "",
+      "imported_id": "2025-12-26-1-2025-12-29-03.28.55.225427"
+    },
+    {
+      "date": "2025-12-29",
+      "amount": 20000000,
+      "payee_name": "Överf Mobil",
+      "notes": "",
+      "imported_id": "2025-12-29-1-2025-12-29-02.15.33.647399"
+    }
+  ]
+}

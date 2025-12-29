@@ -2,15 +2,53 @@
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";
+import * as fs from "fs";
 
 // Resolve path to project root .env file
-// server.js is in backend/, so go up one level to project root
+// server.js is in backend/, so we need to find the correct .env location
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, "..");
-const envPath = path.join(projectRoot, ".env");
 
-dotenv.config({ path: envPath });
+// Detect if running in Home Assistant (check for /app directory or SUPERVISOR_TOKEN)
+const isHomeAssistant =
+  process.cwd().includes("/app") || process.env.SUPERVISOR_TOKEN !== undefined;
+
+// Try multiple .env file locations in priority order
+const possibleEnvPaths = [];
+
+if (isHomeAssistant) {
+  // Home Assistant: .env is one level up at /app/.env
+  const projectRoot = path.resolve(__dirname, "..");
+  possibleEnvPaths.push(path.join(projectRoot, ".env"));
+} else {
+  // Local development: try workspace root (two levels up from backend/)
+  const workspaceRoot = path.resolve(__dirname, "../..");
+  possibleEnvPaths.push(path.join(workspaceRoot, ".env"));
+
+  // Fallback: also check one level up (ab-trx-importer/.env) for backward compatibility
+  const projectRoot = path.resolve(__dirname, "..");
+  possibleEnvPaths.push(path.join(projectRoot, ".env"));
+}
+
+// Find and load the first existing .env file
+let envPath = null;
+for (const candidatePath of possibleEnvPaths) {
+  if (fs.existsSync(candidatePath)) {
+    envPath = candidatePath;
+    break;
+  }
+}
+
+if (envPath) {
+  dotenv.config({ path: envPath });
+  console.log(`✓ Loaded .env file from: ${envPath}`);
+} else {
+  // No .env file found - dotenv will use process.env defaults
+  console.log(
+    `⚠️  No .env file found. Tried locations: ${possibleEnvPaths.join(", ")}`
+  );
+  console.log("   Using environment variables from process.env");
+}
 
 import express from "express";
 import cors from "cors";
@@ -87,8 +125,11 @@ app.get("/api/import", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
-  if (process.env.DEBUG === "true") {
+  const isDebugMode = process.env.DEBUG === "true" || process.env.NODE_ENV === "development";
+  if (isDebugMode) {
     console.log("🐛 Debug mode enabled - verbose logging active");
+    console.log(`   DEBUG=${process.env.DEBUG || "not set"}`);
+    console.log(`   NODE_ENV=${process.env.NODE_ENV || "not set"}`);
   }
   if (process.env.USE_MOCK_SERVICES === "true") {
     console.log("⚠️  Using MOCK services for testing");

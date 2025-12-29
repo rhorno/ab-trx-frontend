@@ -23,4 +23,3 @@ The addon contains `backend/` and `frontend/` directories within the addon direc
 - Source code (`backend/`, `frontend/`) is located in this directory (`ab-trx-importer/`)
 - Symlinks at the repository root (`../backend` and `../frontend`) allow local development to work as before
 - The Dockerfile builds from the addon directory context, ensuring all files are accessible
-

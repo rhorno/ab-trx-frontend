@@ -225,305 +225,412 @@ export class AuthService {
    * Handle the login flow with BankID QR code
    */
   public async login(personnummer: string): Promise<boolean> {
+    this.logger.debug("=== Starting login flow ===");
+    this.logger.debug(`Personnummer: ${personnummer.substring(0, 6)}******`);
+    
     const currentUrl = await this.page.url();
+    this.logger.debug(`Current URL: ${currentUrl}`);
 
     // Only navigate to login page if we're not already there
     if (!currentUrl.includes("logon/se/priv/sv/mbidqr")) {
       this.log("Navigating to login page...");
+      this.logger.debug(`Navigating to: ${LOGIN_URL}`);
       await this.page.goto(LOGIN_URL);
+      this.logger.debug("Navigation complete, waiting for page to load");
     } else {
       this.log("Already on login page, proceeding with login");
+      this.logger.debug("Already on login page, skipping navigation");
     }
 
-    while (true) {
-      this.log("Waiting for userId input field...");
-      await this.page.waitForSelector("input#userId");
-      this.log("Filling in personnummer...");
-      await this.page.fill("input#userId", personnummer);
+    this.log("Waiting for personal ID input field...");
+    this.logger.debug('Waiting for selector: [data-testid="PersonalIdTypeInput__input"]');
+    await this.page.waitForSelector('[data-testid="PersonalIdTypeInput__input"]');
+    this.logger.debug("Personal ID input field found");
+    
+    this.log("Filling in personnummer...");
+    this.logger.debug("Filling input field with personnummer");
+    await this.page.fill('[data-testid="PersonalIdTypeInput__input"]', personnummer);
+    this.logger.debug("Personnummer filled successfully");
+    
+    // Wait a moment for any validation or UI updates after filling the input
+    this.logger.debug("Waiting 100ms for UI to update after filling input");
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-      this.log("Clicking login button...");
+    // After filling personnummer, click "Använd BankID-appen från en annan enhet" button
+    // This button starts the QR code flow (no login button click needed)
+    this.log("Looking for 'Use BankID app from another device' button...");
+    this.logger.debug("Waiting for 'other device' button to appear");
+    
+    // The button has data-test-id="MBIDStartStage__otherDeviceButton"
+    const otherDeviceButtonSelectors = [
+      'button[data-test-id="MBIDStartStage__otherDeviceButton"]',
+      'button[data-testid="MBIDStartStage__otherDeviceButton"]'
+    ];
+    
+    this.logger.debug(`Looking for other device button with selectors: ${otherDeviceButtonSelectors.join(' OR ')}`);
+    
+    let otherDeviceButtonSelector: string | null = null;
+    let otherDeviceButtonFound = false;
+    
+    for (const selector of otherDeviceButtonSelectors) {
       try {
-        await this.page.click(
-          'button[data-test-id="MBIDStartStage__loginButton"]'
-        );
-      } catch (err) {
-        this.log(`Error clicking login button: ${err}`);
-        // Try a different approach if the button is obscured
-        this.log("Trying alternative click method...");
-        await this.page.evaluate(() => {
-          const button = document.querySelector(
-            'button[data-test-id="MBIDStartStage__loginButton"]'
-          );
-          if (button) (button as HTMLButtonElement).click();
+        this.logger.debug(`Trying selector: ${selector}`);
+        await this.page.waitForSelector(selector, { 
+          state: 'visible',
+          timeout: 10000 
         });
-      }
-
-      // Wait a moment for any animations to complete
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Handle QR auth with our improved method
-      this.log("Setting up BankID authentication flow...");
-      try {
-        // Set up our improved QR code detection methods
-        await this.handleBankIdAuthentication();
-
-        // If we get here without errors, consider it a success
-        this.log("BankID authentication completed");
-        return true;
+        this.logger.debug(`Found other device button with selector: ${selector}`);
+        otherDeviceButtonSelector = selector;
+        otherDeviceButtonFound = true;
+        break;
       } catch (error) {
-        this.log(`Error during BankID authentication: ${error}`);
-
-        // Check if we need to retry from a higher-level function
-        return false;
+        this.logger.debug(`Selector ${selector} did not find button: ${error}`);
       }
+    }
+    
+    if (!otherDeviceButtonFound) {
+      // Diagnostic: List all buttons to see what's available
+      this.logger.debug("[Diagnostic] Other device button not found, listing all buttons...");
+      const allButtons = await this.page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button'));
+        return buttons.map((btn, idx) => ({
+          index: idx,
+          text: btn.textContent?.trim() || '',
+          dataTestId: btn.getAttribute('data-testid') || 'none',
+          dataTestIdAlt: btn.getAttribute('data-test-id') || 'none',
+          visible: btn.offsetParent !== null
+        }));
+      });
+      this.logger.debug(`[Diagnostic] Found ${allButtons.length} buttons:`);
+      allButtons.forEach(btn => {
+        this.logger.debug(`[Diagnostic] Button ${btn.index}: text="${btn.text}", data-testid="${btn.dataTestId}", data-test-id="${btn.dataTestIdAlt}", visible=${btn.visible}`);
+      });
+      
+      const errorMsg = `Other device button not found with selectors: ${otherDeviceButtonSelectors.join(', ')}. Available buttons listed in debug logs.`;
+      this.logger.debug(`ERROR: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+    
+    // Click the button - fail fast if it doesn't work
+    if (!otherDeviceButtonSelector) {
+      throw new Error("Other device button selector is null - this should not happen");
+    }
+    
+    this.log("Clicking 'Use BankID app from another device' button...");
+    this.logger.debug(`Clicking button with selector: ${otherDeviceButtonSelector}`);
+    
+    try {
+      await this.page.click(otherDeviceButtonSelector, { timeout: 5000 });
+      this.logger.debug("Other device button clicked successfully");
+    } catch (error) {
+      const errorMsg = `Failed to click other device button: ${error}`;
+      this.logger.debug(`ERROR: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+    
+    // Wait a moment for QR code to appear
+    this.logger.debug("Waiting 1 second for QR code to appear after clicking other device button");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Handle QR auth with simplified monitoring method
+    this.log("Setting up BankID authentication flow...");
+    this.logger.debug("=== Starting QR code monitoring ===");
+    try {
+      await this.handleQrCodeMonitoring();
+
+      // If we get here without errors, consider it a success
+      this.log("BankID authentication completed");
+      this.logger.debug("=== Login flow completed successfully ===");
+      return true;
+    } catch (error) {
+      this.log(`Error during BankID authentication: ${error}`);
+      this.logger.debug(`=== Login flow failed: ${error} ===`);
+      return false;
     }
   }
 
   /**
-   * Handle the BankID authentication flow for Handelsbanken
+   * Handle the BankID authentication flow by monitoring network requests
+   * The website automatically polls the authenticate endpoint - we just intercept the responses
    */
-  private async handleBankIdAuthentication(): Promise<void> {
-    // Setup token detection (for both autoStartToken and qrStartToken)
-    this.setupQrCodeDetection();
+  private async handleQrCodeMonitoring(): Promise<void> {
+    this.logger.debug("Setting up QR code monitoring flow");
+    
+    // Set up network request interception
+    this.logger.debug("Step 1: Setting up network interception");
+    this.setupNetworkInterception();
+    this.logger.debug("Network interception setup complete");
 
-    // Wait for the BankID choice screen to appear
-    this.log("Waiting for BankID authentication choice screen...");
-    try {
-      // Wait for either the same-device or other-device button to appear
-      await Promise.race([
-        this.page.waitForSelector(
-          'button[data-test-id="MBIDStartStage__loginButtonSameDevice"]',
-          { timeout: 10000 }
-        ),
-        this.page.waitForSelector(
-          'button[data-test-id="MBIDStartStage__otherDeviceButton"]',
-          { timeout: 10000 }
-        ),
-        this.page.waitForSelector(
-          'button[data-test-id="MBIDStartStage__loginButton"]',
-          { timeout: 10000 }
-        ),
-      ]);
-      this.log("Found BankID choice screen.");
-    } catch (error) {
-      this.log(
-        "Could not find BankID choice screen through selectors, but continuing anyway."
-      );
-    }
-
-    // Wait a moment for any scripts to initialize
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Set up login success detection (this runs in parallel)
+    // Set up login success detection (runs in parallel)
+    this.logger.debug("Step 2: Setting up login success detection");
     const loginPromise = this.setupLoginSuccessDetection();
+    this.logger.debug("Login success detection setup complete, waiting for authentication...");
 
-    // Based on authMode, click the appropriate button
-    if (this.authMode === "same-device") {
-      this.log("Auth mode: same-device - clicking 'Open BankID app' button...");
-      try {
-        // Click the same-device button to trigger app-to-app flow
-        await this.page.click(
-          'button[data-test-id="MBIDStartStage__loginButtonSameDevice"]'
-        );
-        this.log("Clicked same-device button, waiting for autoStartToken...");
-
-        // Wait for autoStartToken to be captured via network interception
-        await this.waitForAutoStartToken(30000); // 30 second timeout
-
-        if (this.autoStartToken) {
-          this.log(
-            `Successfully obtained autoStartToken: ${this.autoStartToken.substring(
-              0,
-              10
-            )}...${this.autoStartToken.substring(this.autoStartToken.length - 5)}`
-          );
-          // Token is already captured and sent via setupQrCodeDetection -> setAutoStartToken
-        } else {
-          this.log("Warning: autoStartToken not received after clicking same-device button");
-        }
-      } catch (error) {
-        this.log(`Error clicking same-device button: ${error}`);
-        // Try alternative click method
-        await this.page.evaluate(() => {
-          const button = document.querySelector(
-            'button[data-test-id="MBIDStartStage__loginButtonSameDevice"]'
-          );
-          if (button) (button as HTMLButtonElement).click();
-        });
-        await this.waitForAutoStartToken(30000);
-      }
-    } else if (this.authMode === "other-device") {
-      this.log("Auth mode: other-device - clicking 'Use another device' button...");
-      try {
-        // Click the other-device button to trigger QR code flow
-        await this.page.click(
-          'button[data-test-id="MBIDStartStage__otherDeviceButton"]'
-        );
-        this.log("Clicked other-device button, waiting for qrStartToken...");
-
-        // Wait for QR code token
-        const qrStartToken = await this.findQrCodeWithMultipleAttempts();
-
-        if (qrStartToken) {
-          this.log(
-            `Successfully obtained QR token: ${qrStartToken.substring(
-              0,
-              10
-            )}...${qrStartToken.substring(qrStartToken.length - 5)}`
-          );
-          // POC: Notify service layer of QR code
-          if (this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
-            this.serviceRef.setQrToken(qrStartToken);
-          }
-        } else {
-          this.log("Could not find QR code token automatically.");
-        }
-      } catch (error) {
-        this.log(`Error clicking other-device button: ${error}`);
-        // Fallback: try to find QR code anyway
-        const qrStartToken = await this.findQrCodeWithMultipleAttempts();
-        if (qrStartToken && this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
-          this.serviceRef.setQrToken(qrStartToken);
-        }
-      }
-    } else {
-      // No authMode specified - fallback to old behavior (look for QR code)
-      this.log("No authMode specified, falling back to QR code detection...");
-      const qrStartToken = await this.findQrCodeWithMultipleAttempts();
-      if (qrStartToken && this.serviceRef && typeof this.serviceRef.setQrToken === "function") {
-        this.serviceRef.setQrToken(qrStartToken);
-      }
-    }
-
-    // Wait for the login to complete
+    // Wait for authentication to complete
     this.log("Waiting for BankID authentication to complete...");
+    this.logger.debug("Waiting for login promise to resolve...");
     await loginPromise;
     this.log("BankID authentication completed successfully.");
+    this.logger.debug("Login promise resolved - authentication successful");
   }
 
   /**
-   * Wait for autoStartToken to be captured via network interception
+   * Setup network request interception for init and authenticate endpoints
+   * The website automatically polls the authenticate endpoint - we just listen to responses
    */
-  private async waitForAutoStartToken(timeoutMs: number): Promise<void> {
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeoutMs) {
-      if (this.autoStartToken) {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    this.log("Timeout waiting for autoStartToken");
-  }
+  private setupNetworkInterception(): void {
+    this.log("Setting up network request interception for QR code monitoring");
+    this.logger.debug("Registering response listener for network interception");
+    this.logger.debug(`[Network] serviceRef available: ${this.serviceRef !== null}`);
+    this.logger.debug(`[Network] serviceRef.setQrToken available: ${this.serviceRef && typeof this.serviceRef.setQrToken === "function"}`);
 
-  /**
-   * Setup detection of QR codes through response interception
-   */
-  private setupQrCodeDetection(): void {
-    this.log("Setting up QR code detection through response interception");
-
-    // Listen for responses that might contain QR token data
+    // Listen for responses from the specific Handelsbanken API endpoints
     this.page.on("response", async (response: any) => {
       const url = response.url();
+      const status = response.status();
+      this.logger.debug(`[Network] Response received: ${url}`);
+      this.logger.debug(`[Network] Status: ${status}`);
+      this.logger.debug(`[Network] Method: ${response.request().method()}`);
 
-      // Look for common API endpoints that might return token data
-      // This includes endpoints for both QR flow (qrStartToken) and app-to-app flow (autoStartToken)
-      if (
-        url.includes("/api/qr") ||
-        url.includes("/bankid") ||
-        url.includes("/auth") ||
-        url.includes("/login") ||
-        url.includes("/mluri") ||
-        url.includes("/mbidqr")
-      ) {
+      // Monitor init endpoint for initial qrStartToken and sessionId
+      if (url.includes("/mluri/aa/privmbidqrwebse/init/1.0")) {
+        this.logger.debug("[Network] ===== INIT ENDPOINT DETECTED =====");
+        this.logger.debug(`[Network] Full URL: ${url}`);
         try {
           const contentType = response.headers()["content-type"] || "";
-
+          this.logger.debug(`[Network] Content-Type: ${contentType}`);
+          this.logger.debug(`[Network] Response OK: ${response.ok()}`);
+          
           if (contentType.includes("application/json")) {
-            const data = await response.json().catch(() => null);
-
+            this.logger.debug("[Network] Parsing JSON response from init endpoint");
+            const data = await response.json().catch((err: any) => {
+              this.logger.debug(`[Network] JSON parse error: ${err}`);
+              return null;
+            });
+            
             if (data) {
-              // Recursively search for tokens in the response
-              const findToken = (
-                obj: any,
-                targetKey: string
-              ): string | null => {
-                if (!obj || typeof obj !== "object") return null;
-
-                // Direct match for target key
-                if (obj[targetKey] && typeof obj[targetKey] === "string") {
-                  return obj[targetKey];
-                }
-
-                // For qrStartToken, also check qrData and generic token
-                if (targetKey === "qrStartToken") {
-                  if (obj.qrData && typeof obj.qrData === "string") {
-                    return obj.qrData;
-                  }
-
-                  if (
-                    obj.token &&
-                    typeof obj.token === "string" &&
-                    obj.token.length > 20
-                  ) {
-                    return obj.token;
-                  }
-                }
-
-                // Recursively search nested objects
-                for (const key in obj) {
-                  if (typeof obj[key] === "object") {
-                    const result = findToken(obj[key], targetKey);
-                    if (result) return result;
-                  }
-                }
-
-                return null;
-              };
-
-              // Look for autoStartToken (for app-to-app flow)
-              const autoStartToken = findToken(data, "autoStartToken");
-              if (autoStartToken && !this.autoStartToken) {
+              this.logger.debug(`[Network] Init response data keys: ${Object.keys(data).join(", ")}`);
+              this.logger.debug(`[Network] Full init response: ${JSON.stringify(data, null, 2)}`);
+              
+              if (data.qrStartToken) {
                 this.log(
-                  `Found autoStartToken in API response: ${autoStartToken.substring(
+                  `Found initial QR token from init endpoint: ${data.qrStartToken.substring(
                     0,
                     10
-                  )}...${autoStartToken.substring(autoStartToken.length - 5)}`
+                  )}...${data.qrStartToken.substring(data.qrStartToken.length - 5)}`
                 );
-                this.autoStartToken = autoStartToken;
-                // Notify service layer
-                if (
-                  this.serviceRef &&
-                  typeof this.serviceRef.setAutoStartToken === "function"
-                ) {
-                  this.serviceRef.setAutoStartToken(autoStartToken);
+                this.logger.debug(`[Network] Initial QR token extracted: ${data.qrStartToken.substring(0, 20)}...`);
+                this.logger.debug(`[Network] QR token length: ${data.qrStartToken.length}`);
+                
+                if (data._links && data._links.authenticate) {
+                  this.logger.debug(`[Network] Authenticate link: ${data._links.authenticate.href}`);
+                  const sessionIdMatch = data._links.authenticate.href.match(/sessionId=([^&]+)/);
+                  if (sessionIdMatch) {
+                    this.logger.debug(`[Network] Session ID extracted: ${sessionIdMatch[1]}`);
+                  }
                 }
-              }
-
-              // Look for qrStartToken (for QR code flow)
-              const qrToken = findToken(data, "qrStartToken");
-              if (qrToken && !this.qrStartToken) {
-                this.log(
-                  `Found QR token in API response: ${qrToken.substring(
-                    0,
-                    10
-                  )}...${qrToken.substring(qrToken.length - 5)}`
-                );
-                this.qrStartToken = qrToken;
+                
+                const previousToken = this.qrStartToken;
+                this.qrStartToken = data.qrStartToken;
+                this.logger.debug(`[Network] Storing initial QR token (previous: ${previousToken ? previousToken.substring(0, 10) + "..." : "null"})`);
+                
                 // Notify service layer (frontend will render)
-                if (
-                  this.serviceRef &&
-                  typeof this.serviceRef.setQrToken === "function"
-                ) {
-                  this.serviceRef.setQrToken(qrToken);
+                this.logger.debug(`[Network] Checking serviceRef: ${this.serviceRef !== null}`);
+                if (this.serviceRef) {
+                  this.logger.debug(`[Network] serviceRef type: ${typeof this.serviceRef}`);
+                  this.logger.debug(`[Network] setQrToken type: ${typeof this.serviceRef.setQrToken}`);
+                  
+                  if (typeof this.serviceRef.setQrToken === "function") {
+                    this.logger.debug("[Network] Calling serviceRef.setQrToken() with token");
+                    try {
+                      this.serviceRef.setQrToken(data.qrStartToken);
+                      this.logger.debug("[Network] serviceRef.setQrToken() called successfully");
+                    } catch (err) {
+                      this.logger.debug(`[Network] ERROR calling setQrToken: ${err}`);
+                    }
+                  } else {
+                    this.logger.debug("[Network] ERROR: serviceRef.setQrToken is not a function");
+                  }
+                } else {
+                  this.logger.debug("[Network] ERROR: serviceRef is null or undefined");
                 }
+              } else {
+                this.logger.debug("[Network] No qrStartToken found in init response");
+                this.logger.debug(`[Network] Available keys in response: ${Object.keys(data).join(", ")}`);
               }
+            } else {
+              this.logger.debug("[Network] Failed to parse JSON from init response - data is null");
+            }
+          } else {
+            this.logger.debug(`[Network] Response is not JSON (Content-Type: ${contentType})`);
+            const text = await response.text().catch(() => null);
+            if (text) {
+              this.logger.debug(`[Network] Response text (first 200 chars): ${text.substring(0, 200)}`);
             }
           }
         } catch (error) {
-          // Ignore errors in response handling
+          this.log(`Error processing init response: ${error}`);
+          this.logger.debug(`[Network] Error processing init response: ${error}`);
+          this.logger.debug(`[Network] Error stack: ${error instanceof Error ? error.stack : "no stack"}`);
+        }
+        this.logger.debug("[Network] ===== INIT ENDPOINT PROCESSING COMPLETE =====");
+      }
+
+      // Monitor authenticate endpoint for polling responses (website polls automatically)
+      if (url.includes("/mluri/aa/privmbidqrwebse/authenticate/1.0")) {
+        this.logger.debug("[Network] ===== AUTHENTICATE ENDPOINT DETECTED =====");
+        this.logger.debug(`[Network] Full URL: ${url}`);
+        try {
+          const contentType = response.headers()["content-type"] || "";
+          this.logger.debug(`[Network] Content-Type: ${contentType}`);
+          this.logger.debug(`[Network] Response OK: ${response.ok()}`);
+          
+          if (contentType.includes("application/json")) {
+            this.logger.debug("[Network] Parsing JSON response from authenticate endpoint");
+            const data = await response.json().catch((err: any) => {
+              this.logger.debug(`[Network] JSON parse error: ${err}`);
+              return null;
+            });
+            
+            if (data) {
+              this.logger.debug(`[Network] Authenticate response data keys: ${Object.keys(data).join(", ")}`);
+              this.logger.debug(`[Network] Full authenticate response: ${JSON.stringify(data, null, 2)}`);
+              this.logger.debug(`[Network] Response result: ${data.result || "none"}`);
+              this.logger.debug(`[Network] Current stored qrStartToken: ${this.qrStartToken ? this.qrStartToken.substring(0, 20) + "..." : "null"}`);
+              
+              // Handle different states from polling responses
+              if (data.result === "QR_EXPIRED") {
+                this.log("QR code expired - authentication timeout");
+                this.logger.debug("[Network] QR_EXPIRED state detected");
+                // Notify service layer of expiration
+                if (
+                  this.serviceRef &&
+                  typeof this.serviceRef.notifyAuthError === "function"
+                ) {
+                  this.logger.debug("[Network] Notifying service layer of QR expiration");
+                  this.serviceRef.notifyAuthError("QR code expired - please try again");
+                  this.logger.debug("[Network] Service layer notified of expiration");
+                } else {
+                  this.logger.debug("[Network] WARNING: serviceRef not available for error notification");
+                  this.logger.debug(`[Network] serviceRef: ${this.serviceRef}, notifyAuthError type: ${this.serviceRef ? typeof this.serviceRef.notifyAuthError : "N/A"}`);
+                }
+              } else if (data.result === "IN_PROGRESS") {
+                this.log("Authentication in progress - waiting for user approval");
+                this.logger.debug("[Network] IN_PROGRESS state - user has scanned, waiting for approval");
+              } else if (data.result === "NO_CLIENT_STARTED") {
+                this.log("Waiting for user to scan QR code");
+                this.logger.debug("[Network] NO_CLIENT_STARTED state - waiting for user to scan QR code");
+              } else {
+                this.logger.debug(`[Network] Unknown result state: ${data.result}`);
+              }
+
+              // Update QR code if qrStartToken changed (new QR code generated)
+              if (data.qrStartToken) {
+                this.logger.debug(`[Network] qrStartToken found in response: ${data.qrStartToken.substring(0, 20)}...`);
+                this.logger.debug(`[Network] Comparing tokens - current: ${this.qrStartToken ? this.qrStartToken.substring(0, 20) + "..." : "null"}, new: ${data.qrStartToken.substring(0, 20)}...`);
+                
+                if (data.qrStartToken !== this.qrStartToken) {
+                  this.log(
+                    `QR token updated: ${data.qrStartToken.substring(
+                      0,
+                      10
+                    )}...${data.qrStartToken.substring(data.qrStartToken.length - 5)}`
+                  );
+                  this.logger.debug(`[Network] QR token changed from ${this.qrStartToken?.substring(0, 10) || "null"}... to ${data.qrStartToken.substring(0, 10)}...`);
+                  this.qrStartToken = data.qrStartToken;
+                  this.logger.debug("[Network] Storing updated QR token");
+                  
+                  // Notify service layer to update frontend QR code
+                  this.logger.debug(`[Network] Checking serviceRef for token update: ${this.serviceRef !== null}`);
+                  if (this.serviceRef) {
+                    this.logger.debug(`[Network] setQrToken type: ${typeof this.serviceRef.setQrToken}`);
+                    if (typeof this.serviceRef.setQrToken === "function") {
+                      this.logger.debug("[Network] Calling serviceRef.setQrToken() with updated token");
+                      try {
+                        this.serviceRef.setQrToken(data.qrStartToken);
+                        this.logger.debug("[Network] serviceRef.setQrToken() called successfully");
+                      } catch (err) {
+                        this.logger.debug(`[Network] ERROR calling setQrToken: ${err}`);
+                      }
+                    } else {
+                      this.logger.debug("[Network] ERROR: serviceRef.setQrToken is not a function");
+                    }
+                  } else {
+                    this.logger.debug("[Network] ERROR: serviceRef is null for token update");
+                  }
+                } else {
+                  this.logger.debug("[Network] QR token unchanged, skipping update");
+                }
+              } else {
+                this.logger.debug("[Network] No qrStartToken in authenticate response");
+                this.logger.debug(`[Network] Available keys: ${Object.keys(data).join(", ")}`);
+              }
+
+              // Handle autoStartToken for same-device flow
+              if (data.autoStartToken) {
+                this.logger.debug(`[Network] autoStartToken found: ${data.autoStartToken.substring(0, 20)}...`);
+                if (!this.autoStartToken) {
+                  this.log(
+                    `Found autoStartToken: ${data.autoStartToken.substring(
+                      0,
+                      10
+                    )}...${data.autoStartToken.substring(data.autoStartToken.length - 5)}`
+                  );
+                  this.autoStartToken = data.autoStartToken;
+                  this.logger.debug("[Network] Storing autoStartToken");
+                  
+                  // Notify service layer
+                  if (
+                    this.serviceRef &&
+                    typeof this.serviceRef.setAutoStartToken === "function"
+                  ) {
+                    this.logger.debug("[Network] Notifying service layer of autoStartToken");
+                    this.serviceRef.setAutoStartToken(data.autoStartToken);
+                    this.logger.debug("[Network] Service layer notified of autoStartToken");
+                  } else {
+                    this.logger.debug("[Network] WARNING: serviceRef not available for autoStartToken");
+                  }
+                } else {
+                  this.logger.debug("[Network] AutoStartToken already exists, skipping");
+                }
+              } else {
+                this.logger.debug("[Network] No autoStartToken in authenticate response");
+              }
+              
+              // Log iterationSleepTime if present
+              if (data.iterationSleepTime) {
+                this.logger.debug(`[Network] Iteration sleep time: ${data.iterationSleepTime}ms`);
+              }
+            } else {
+              this.logger.debug("[Network] Failed to parse JSON from authenticate response - data is null");
+              const text = await response.text().catch(() => null);
+              if (text) {
+                this.logger.debug(`[Network] Response text (first 200 chars): ${text.substring(0, 200)}`);
+              }
+            }
+          } else {
+            this.logger.debug(`[Network] Response is not JSON (Content-Type: ${contentType})`);
+            const text = await response.text().catch(() => null);
+            if (text) {
+              this.logger.debug(`[Network] Response text (first 200 chars): ${text.substring(0, 200)}`);
+            }
+          }
+        } catch (error) {
+          this.log(`Error processing authenticate response: ${error}`);
+          this.logger.debug(`[Network] Error processing authenticate response: ${error}`);
+          this.logger.debug(`[Network] Error stack: ${error instanceof Error ? error.stack : "no stack"}`);
+        }
+        this.logger.debug("[Network] ===== AUTHENTICATE ENDPOINT PROCESSING COMPLETE =====");
+      } else {
+        // Log other network requests for debugging (but don't process them)
+        if (url.includes("/mluri/") || url.includes("/mbidqr")) {
+          this.logger.debug(`[Network] Other relevant URL detected (not init/authenticate): ${url}`);
         }
       }
     });
+    
+    this.logger.debug("Network interception listener registered successfully");
+    this.logger.debug(`[Network] Final serviceRef check: ${this.serviceRef !== null}`);
   }
 
   /**
@@ -532,6 +639,8 @@ export class AuthService {
   private setupLoginSuccessDetection(): Promise<void> {
     return new Promise<void>((resolve) => {
       this.log("Setting up login success detection");
+      this.logger.debug("[Login Detection] Initializing login success detection");
+      this.logger.debug("[Login Detection] Timeout set to 120 seconds (2 minutes)");
 
       // Flag to track if we've already resolved
       let hasResolved = false;
@@ -540,6 +649,7 @@ export class AuthService {
       const timeout = setTimeout(() => {
         if (!hasResolved) {
           this.log("Login detection timeout reached");
+          this.logger.debug("[Login Detection] Timeout reached after 120 seconds");
           hasResolved = true;
           resolve();
         }
@@ -551,18 +661,24 @@ export class AuthService {
           // Main frame only
           const url = frame.url();
           this.log(`Main frame navigated to: ${url}`);
+          this.logger.debug(`[Login Detection] Frame navigated to: ${url}`);
 
           // Check if the URL indicates a successful login
-          if (
+          const isAuthenticatedUrl =
             url.includes("/privat") ||
             url.includes("/dashboard") ||
             url.includes("/overview") ||
             url.includes("/account") ||
             url.includes("/welcome") ||
-            !url.includes("/login")
-          ) {
+            !url.includes("/login");
+            
+          this.logger.debug(`[Login Detection] Is authenticated URL: ${isAuthenticatedUrl}`);
+          
+          if (isAuthenticatedUrl) {
+            this.logger.debug("[Login Detection] Potential authenticated URL detected, checking page content");
             // Wait a bit to make sure the page has loaded
             await new Promise((resolve) => setTimeout(resolve, 2000));
+            this.logger.debug("[Login Detection] Waited 2 seconds for page to load");
 
             // Check for elements that indicate we're logged in
             const isLoggedIn = await this.page
@@ -577,35 +693,50 @@ export class AuthService {
                   '[class*="welcome"],[class*="greeting"]'
                 );
 
-                return (
-                  logoutLinks.length > 0 ||
-                  accountElements.length > 0 ||
-                  welcomeElements.length > 0
-                );
+                return {
+                  hasLogoutLinks: logoutLinks.length > 0,
+                  hasAccountElements: accountElements.length > 0,
+                  hasWelcomeElements: welcomeElements.length > 0,
+                  isLoggedIn: (
+                    logoutLinks.length > 0 ||
+                    accountElements.length > 0 ||
+                    welcomeElements.length > 0
+                  )
+                };
               })
-              .catch(() => false);
+              .catch(() => ({ isLoggedIn: false }));
 
-            if (isLoggedIn) {
+            this.logger.debug(`[Login Detection] Page content check: ${JSON.stringify(isLoggedIn)}`);
+
+            if (isLoggedIn.isLoggedIn) {
               this.log(
                 "Detected successful login based on page navigation and content"
               );
+              this.logger.debug("[Login Detection] Login confirmed - clearing timeout and resolving");
               clearTimeout(timeout);
               if (!hasResolved) {
                 hasResolved = true;
                 resolve();
               }
+            } else {
+              this.logger.debug("[Login Detection] Page content does not indicate login yet");
             }
+          } else {
+            this.logger.debug("[Login Detection] URL does not indicate authenticated state");
           }
         }
       });
 
       // Also detect successful login by checking periodically
+      this.logger.debug("[Login Detection] Setting up periodic check (every 5 seconds)");
       const checkLoginInterval = setInterval(async () => {
         if (hasResolved) {
+          this.logger.debug("[Login Detection] Already resolved, clearing interval");
           clearInterval(checkLoginInterval);
           return;
         }
 
+        this.logger.debug("[Login Detection] Running periodic login check");
         try {
           const isLoggedIn = await this.page
             .evaluate(() => {
@@ -619,16 +750,24 @@ export class AuthService {
                 '[class*="welcome"],[class*="greeting"]'
               );
 
-              return (
-                logoutLinks.length > 0 ||
-                accountElements.length > 0 ||
-                welcomeElements.length > 0
-              );
+              return {
+                hasLogoutLinks: logoutLinks.length > 0,
+                hasAccountElements: accountElements.length > 0,
+                hasWelcomeElements: welcomeElements.length > 0,
+                isLoggedIn: (
+                  logoutLinks.length > 0 ||
+                  accountElements.length > 0 ||
+                  welcomeElements.length > 0
+                )
+              };
             })
-            .catch(() => false);
+            .catch(() => ({ isLoggedIn: false }));
 
-          if (isLoggedIn) {
+          this.logger.debug(`[Login Detection] Periodic check result: ${JSON.stringify(isLoggedIn)}`);
+
+          if (isLoggedIn.isLoggedIn) {
             this.log("Detected successful login through periodic check");
+            this.logger.debug("[Login Detection] Login confirmed via periodic check - clearing timeout and interval");
             clearTimeout(timeout);
             clearInterval(checkLoginInterval);
             if (!hasResolved) {
@@ -637,418 +776,11 @@ export class AuthService {
             }
           }
         } catch (error) {
+          this.logger.debug(`[Login Detection] Error in periodic check: ${error}`);
           // Ignore errors in check
         }
       }, 5000); // Check every 5 seconds
     });
   }
 
-  /**
-   * Extract QR code token from the current page
-   */
-  private async extractQrCodeFromPage(): Promise<string | null> {
-    this.log("Attempting to extract QR code from page...");
-
-    try {
-      return await this.page.evaluate(() => {
-        // Method 1: Look for qrStartToken in window variables
-        if (
-          window.hasOwnProperty("qrData") ||
-          window.hasOwnProperty("qrStartToken")
-        ) {
-          // @ts-ignore
-          const token = window.qrData || window.qrStartToken;
-          if (typeof token === "string" && token.length > 20) {
-            console.log(
-              `Found qrStartToken in window object: ${token.substring(
-                0,
-                10
-              )}...`
-            );
-            return token;
-          }
-        }
-
-        // Method 2: Check if there's a QR token in any script tag
-        const scripts = Array.from(document.querySelectorAll("script"));
-        for (const script of scripts) {
-          const content = script.textContent || "";
-          if (content.includes("qrStartToken") || content.includes("qrData")) {
-            // Try multiple regex patterns to capture various formats
-            const patterns = [
-              /"qrStartToken"\s*:\s*"([^"]+)"/,
-              /'qrStartToken'\s*:\s*'([^']+)'/,
-              /qrStartToken\s*=\s*["']([^"']+)["']/,
-              /"qrData"\s*:\s*"([^"]+)"/,
-              /'qrData'\s*:\s*'([^']+)'/,
-              /qrData\s*=\s*["']([^"']+)["']/,
-            ];
-
-            for (const pattern of patterns) {
-              const match = content.match(pattern);
-              if (match && match[1]) {
-                console.log(
-                  `Found QR token in script: ${match[1].substring(0, 10)}...`
-                );
-                return match[1];
-              }
-            }
-          }
-        }
-
-        // Method 3: Look for it in the page source using various patterns
-        const html = document.documentElement.outerHTML;
-        const sourcePatterns = [
-          /"qrStartToken"\s*:\s*"([^"]+)"/,
-          /'qrStartToken'\s*:\s*'([^']+)'/,
-          /qrStartToken\s*=\s*["']([^"']+)["']/,
-          /"qrData"\s*:\s*"([^"]+)"/,
-          /'qrData'\s*:\s*'([^']+)'/,
-          /qrData\s*=\s*["']([^"']+)["']/,
-        ];
-
-        for (const pattern of sourcePatterns) {
-          const match = html.match(pattern);
-          if (match && match[1]) {
-            console.log(
-              `Found QR token in page source: ${match[1].substring(0, 10)}...`
-            );
-            return match[1];
-          }
-        }
-
-        // Method 4: Look for canvas elements that might be rendering QR codes
-        const canvases = document.querySelectorAll("canvas");
-        if (canvases.length > 0) {
-          console.log(
-            `Found ${canvases.length} canvas elements, checking for QR code data`
-          );
-
-          // Sometimes QR code data is stored in adjacent elements or data attributes
-          for (const canvas of Array.from(canvases)) {
-            // Check parent and sibling elements for data attributes
-            const parent = canvas.parentElement;
-            if (parent) {
-              const dataAttrs = parent
-                .getAttributeNames()
-                .filter((attr) => attr.startsWith("data-"));
-              for (const attr of dataAttrs) {
-                const value = parent.getAttribute(attr);
-                if (value && value.length > 20) {
-                  console.log(
-                    `Found potential token in canvas parent data attribute: ${value.substring(
-                      0,
-                      10
-                    )}...`
-                  );
-                  return value;
-                }
-              }
-            }
-          }
-        }
-
-        // Method 5: Check for src attributes in img tags that might contain the QR data
-        const qrImages = document.querySelectorAll(
-          'img[src^="data:image/"], img[alt*="QR"], img[alt*="qr"]'
-        );
-        for (const img of Array.from(qrImages)) {
-          // Check if there are any hidden inputs or data attributes nearby
-          const parent = img.parentElement;
-          if (parent) {
-            // Look for hidden inputs
-            const inputs = parent.querySelectorAll('input[type="hidden"]');
-            for (const input of Array.from(inputs)) {
-              const value = (input as HTMLInputElement).value;
-              if (value && value.length > 20) {
-                console.log(
-                  `Found potential token in hidden input: ${value.substring(
-                    0,
-                    10
-                  )}...`
-                );
-                return value;
-              }
-            }
-
-            // Check for data attributes that might contain the token
-            const dataAttrs = parent
-              .getAttributeNames()
-              .filter((attr) => attr.startsWith("data-"));
-            for (const attr of dataAttrs) {
-              const value = parent.getAttribute(attr);
-              if (value && value.length > 20) {
-                console.log(
-                  `Found potential token in img parent data attribute: ${value.substring(
-                    0,
-                    10
-                  )}...`
-                );
-                return value;
-              }
-            }
-          }
-        }
-
-        // Method 6: Look for QR code information in any DOM elements
-        // This is more aggressive but might be needed when the QR code is rendered in a non-standard way
-        const potentialContainers = document.querySelectorAll(
-          '[class*="qr"], [id*="qr"], [data-*="qr"], [class*="bankid"], [id*="bankid"]'
-        );
-
-        for (const container of Array.from(potentialContainers)) {
-          // Check for data attributes
-          const allAttributes = container.getAttributeNames();
-          for (const attr of allAttributes) {
-            const value = container.getAttribute(attr);
-            if (value && value.length > 20) {
-              console.log(
-                `Found potential token in element attribute: ${value.substring(
-                  0,
-                  10
-                )}...`
-              );
-              return value;
-            }
-          }
-
-          // Check text content of the element and its children
-          const text = container.textContent || "";
-          const matches = text.match(/[A-Za-z0-9+/=]{30,}/);
-          if (matches && matches[0]) {
-            console.log(
-              `Found potential token in text content: ${matches[0].substring(
-                0,
-                10
-              )}...`
-            );
-            return matches[0];
-          }
-        }
-
-        // Method 7: As a last resort, check all rendered JSON data on the page
-        console.log(
-          "Searching for QR token in all page scripts as last resort"
-        );
-        const allScriptContents = scripts
-          .map((s) => s.textContent || "")
-          .join(" ");
-        const jsonBlocks = allScriptContents.match(/(\{[^{}]*\})/g) || [];
-
-        for (const jsonBlock of jsonBlocks) {
-          try {
-            const data = JSON.parse(jsonBlock);
-            // Recursively search for qrStartToken or qrData in the parsed object
-            const findToken = (obj: any): string | null => {
-              if (!obj || typeof obj !== "object") return null;
-
-              if (obj.qrStartToken && typeof obj.qrStartToken === "string") {
-                return obj.qrStartToken;
-              }
-
-              if (obj.qrData && typeof obj.qrData === "string") {
-                return obj.qrData;
-              }
-
-              for (const key in obj) {
-                if (typeof obj[key] === "object") {
-                  const result = findToken(obj[key]);
-                  if (result) return result;
-                }
-              }
-
-              return null;
-            };
-
-            const token = findToken(data);
-            if (token) {
-              console.log(
-                `Found QR token in JSON data: ${token.substring(0, 10)}...`
-              );
-              return token;
-            }
-          } catch (e) {
-            // Ignore parsing errors
-          }
-        }
-
-        return null;
-      });
-    } catch (error) {
-      this.log(`Error extracting QR code: ${error}`);
-      return null;
-    }
-  }
-
-  /**
-   * Check for QR code expiration indicators on the page
-   */
-  private async checkQrCodeExpiration(): Promise<boolean> {
-    try {
-      // Check for common expiration indicators
-      return await this.page.evaluate(() => {
-        // Look for text indicating expiration
-        const expirationTexts = [
-          "utgått",
-          "expired",
-          "förfallen",
-          "ny kod",
-          "new code",
-          "försök igen",
-          "try again",
-          "uppdatera",
-          "refresh",
-          "qr-koden har utgått",
-          "qr code has expired",
-        ];
-
-        // Get all text from the page
-        const pageText = document.body.innerText.toLowerCase();
-
-        // Check if any expiration text is present
-        for (const text of expirationTexts) {
-          if (pageText.includes(text)) {
-            console.log(`Detected QR code expiration indicator: ${text}`);
-            return true;
-          }
-        }
-
-        // Also check for timers that might be at zero
-        const timerElements = document.querySelectorAll(
-          '[class*="timer"], [class*="countdown"], [class*="tid"]'
-        );
-        for (const timer of Array.from(timerElements)) {
-          const timerText = timer.textContent || "";
-          if (timerText.includes("0:00") || timerText.includes("00:00")) {
-            console.log("Detected countdown timer at zero");
-            return true;
-          }
-        }
-
-        // Check for specific error messages or indicators
-        const errorElements = document.querySelectorAll(
-          '.error, .alert, .warning, [class*="error"], [class*="warning"]'
-        );
-        for (const error of Array.from(errorElements)) {
-          const errorText = error.textContent || "";
-          if (errorText.length > 0) {
-            console.log(
-              `Detected error message: ${errorText.substring(0, 50)}...`
-            );
-            return true;
-          }
-        }
-
-        return false;
-      });
-    } catch (error) {
-      this.log(`Error checking QR code expiration: ${error}`);
-      return false;
-    }
-  }
-
-  /**
-   * Ensures we find the QR code by trying multiple methods and attempts
-   */
-  private async findQrCodeWithMultipleAttempts(): Promise<string | null> {
-    this.log("Trying to find QR code with multiple attempts...");
-
-    // Try extracting the QR code multiple times with different timings
-    const delays = [500, 1000, 2000, 3000, 5000];
-
-    for (let i = 0; i < delays.length; i++) {
-      // Try first to get it from intercepted responses
-      if (this.qrStartToken) {
-        this.log(
-          `Found qrStartToken from intercepted responses: ${this.qrStartToken.substring(
-            0,
-            10
-          )}...`
-        );
-        const token = this.qrStartToken;
-        // Log token (frontend will render)
-        this.log(
-          `QR token from intercepted responses: ${token.substring(
-            0,
-            10
-          )}...${token.substring(token.length - 5)}`
-        );
-        // POC: Notify service layer
-        if (
-          this.serviceRef &&
-          typeof this.serviceRef.setQrToken === "function"
-        ) {
-          this.serviceRef.setQrToken(token);
-        }
-        return token;
-      }
-
-      // Then try to extract it from the page
-      const extractedToken = await this.extractQrCodeFromPage();
-      if (extractedToken) {
-        this.log(
-          `Successfully extracted QR code from page on attempt ${
-            i + 1
-          }: ${extractedToken.substring(0, 10)}...${extractedToken.substring(
-            extractedToken.length - 5
-          )}`
-        );
-        // POC: Notify service layer (frontend will render)
-        if (
-          this.serviceRef &&
-          typeof this.serviceRef.setQrToken === "function"
-        ) {
-          this.serviceRef.setQrToken(extractedToken);
-        }
-        return extractedToken;
-      }
-
-      this.log(
-        `QR code not found on attempt ${i + 1}, waiting ${
-          delays[i]
-        }ms before next attempt...`
-      );
-
-      if (i < delays.length - 1) {
-        // Try clicking any "Show QR code" buttons or alternatives
-        await this.page.evaluate(() => {
-          // Find and click any buttons that might reveal the QR code
-          const potentialButtons = Array.from(
-            document.querySelectorAll('button, a, [role="button"]')
-          ).filter((el) => {
-            const text = (el.textContent || "").toLowerCase();
-            return (
-              text.includes("qr") ||
-              text.includes("visa qr") ||
-              text.includes("bankid") ||
-              text.includes("mobil") ||
-              text.includes("visa kod")
-            );
-          });
-
-          if (potentialButtons.length > 0) {
-            console.log(
-              `Found ${potentialButtons.length} potential QR trigger buttons`
-            );
-            (potentialButtons[0] as HTMLElement).click();
-          }
-        });
-
-        // Wait for the specified delay
-        await new Promise((resolve) => setTimeout(resolve, delays[i]));
-      }
-    }
-
-    // If we get here, try one last approach - refresh the page and try again
-    this.log("Refreshing page for one final attempt...");
-    try {
-      await this.page.reload();
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      return await this.extractQrCodeFromPage();
-    } catch (error) {
-      this.log(`Error during final QR code extraction attempt: ${error}`);
-    }
-
-    return null;
-  }
 }
