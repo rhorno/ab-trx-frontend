@@ -256,81 +256,156 @@ export class AuthService {
     this.logger.debug("Waiting 100ms for UI to update after filling input");
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // After filling personnummer, click "Använd BankID-appen från en annan enhet" button
-    // This button starts the QR code flow (no login button click needed)
-    this.log("Looking for 'Use BankID app from another device' button...");
-    this.logger.debug("Waiting for 'other device' button to appear");
+    // Determine which button to click based on authMode
+    this.logger.debug(`[Auth Mode] Current authMode: ${this.authMode || "null (defaults to other-device)"}`);
     
-    // The button has data-test-id="MBIDStartStage__otherDeviceButton"
-    const otherDeviceButtonSelectors = [
-      'button[data-test-id="MBIDStartStage__otherDeviceButton"]',
-      'button[data-testid="MBIDStartStage__otherDeviceButton"]'
-    ];
-    
-    this.logger.debug(`Looking for other device button with selectors: ${otherDeviceButtonSelectors.join(' OR ')}`);
-    
-    let otherDeviceButtonSelector: string | null = null;
-    let otherDeviceButtonFound = false;
-    
-    for (const selector of otherDeviceButtonSelectors) {
-      try {
-        this.logger.debug(`Trying selector: ${selector}`);
-        await this.page.waitForSelector(selector, { 
-          state: 'visible',
-          timeout: 10000 
-        });
-        this.logger.debug(`Found other device button with selector: ${selector}`);
-        otherDeviceButtonSelector = selector;
-        otherDeviceButtonFound = true;
-        break;
-      } catch (error) {
-        this.logger.debug(`Selector ${selector} did not find button: ${error}`);
-      }
-    }
-    
-    if (!otherDeviceButtonFound) {
-      // Diagnostic: List all buttons to see what's available
-      this.logger.debug("[Diagnostic] Other device button not found, listing all buttons...");
-      const allButtons = await this.page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button'));
-        return buttons.map((btn, idx) => ({
-          index: idx,
-          text: btn.textContent?.trim() || '',
-          dataTestId: btn.getAttribute('data-testid') || 'none',
-          dataTestIdAlt: btn.getAttribute('data-test-id') || 'none',
-          visible: btn.offsetParent !== null
-        }));
-      });
-      this.logger.debug(`[Diagnostic] Found ${allButtons.length} buttons:`);
-      allButtons.forEach(btn => {
-        this.logger.debug(`[Diagnostic] Button ${btn.index}: text="${btn.text}", data-testid="${btn.dataTestId}", data-test-id="${btn.dataTestIdAlt}", visible=${btn.visible}`);
-      });
+    if (this.authMode === "same-device") {
+      // Same-device flow: Click "Open BankID app" button
+      this.log("Auth mode: same-device - Looking for 'Open BankID app' button...");
+      this.logger.debug("[Auth Mode] Using same-device flow - will open BankID app");
       
-      const errorMsg = `Other device button not found with selectors: ${otherDeviceButtonSelectors.join(', ')}. Available buttons listed in debug logs.`;
-      this.logger.debug(`ERROR: ${errorMsg}`);
-      throw new Error(errorMsg);
+      const sameDeviceButtonSelectors = [
+        'button[data-test-id="MBIDStartStage__loginButtonSameDevice"]',
+        'button[data-testid="MBIDStartStage__loginButtonSameDevice"]'
+      ];
+      
+      this.logger.debug(`[Auth Mode] Looking for same-device button with selectors: ${sameDeviceButtonSelectors.join(' OR ')}`);
+      
+      let sameDeviceButtonSelector: string | null = null;
+      let sameDeviceButtonFound = false;
+      
+      for (const selector of sameDeviceButtonSelectors) {
+        try {
+          this.logger.debug(`[Auth Mode] Trying selector: ${selector}`);
+          await this.page.waitForSelector(selector, { 
+            state: 'visible',
+            timeout: 10000 
+          });
+          this.logger.debug(`[Auth Mode] Found same-device button with selector: ${selector}`);
+          sameDeviceButtonSelector = selector;
+          sameDeviceButtonFound = true;
+          break;
+        } catch (error) {
+          this.logger.debug(`[Auth Mode] Selector ${selector} did not find button: ${error}`);
+        }
+      }
+      
+      if (!sameDeviceButtonFound) {
+        // Diagnostic: List all buttons to see what's available
+        this.logger.debug("[Auth Mode] [Diagnostic] Same-device button not found, listing all buttons...");
+        const allButtons = await this.page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          return buttons.map((btn, idx) => ({
+            index: idx,
+            text: btn.textContent?.trim() || '',
+            dataTestId: btn.getAttribute('data-testid') || 'none',
+            dataTestIdAlt: btn.getAttribute('data-test-id') || 'none',
+            visible: btn.offsetParent !== null
+          }));
+        });
+        this.logger.debug(`[Auth Mode] [Diagnostic] Found ${allButtons.length} buttons:`);
+        allButtons.forEach(btn => {
+          this.logger.debug(`[Auth Mode] [Diagnostic] Button ${btn.index}: text="${btn.text}", data-testid="${btn.dataTestId}", data-test-id="${btn.dataTestIdAlt}", visible=${btn.visible}`);
+        });
+        
+        const errorMsg = `Same-device button not found with selectors: ${sameDeviceButtonSelectors.join(', ')}. Available buttons listed in debug logs.`;
+        this.logger.debug(`[Auth Mode] ERROR: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      if (!sameDeviceButtonSelector) {
+        throw new Error("Same-device button selector is null - this should not happen");
+      }
+      
+      this.log("Clicking 'Open BankID app' button...");
+      this.logger.debug(`[Auth Mode] Clicking same-device button with selector: ${sameDeviceButtonSelector}`);
+      
+      try {
+        await this.page.click(sameDeviceButtonSelector, { timeout: 5000 });
+        this.logger.debug("[Auth Mode] Same-device button clicked successfully");
+      } catch (error) {
+        const errorMsg = `Failed to click same-device button: ${error}`;
+        this.logger.debug(`[Auth Mode] ERROR: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      // Wait for init endpoint response with autoStartToken
+      this.logger.debug("[Auth Mode] Waiting for init endpoint response with autoStartToken...");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    } else {
+      // Other-device flow: Click "Use BankID app from another device" button (QR code flow)
+      this.log("Auth mode: other-device - Looking for 'Use BankID app from another device' button...");
+      this.logger.debug("[Auth Mode] Using other-device flow - will show QR code");
+      
+      const otherDeviceButtonSelectors = [
+        'button[data-test-id="MBIDStartStage__otherDeviceButton"]',
+        'button[data-testid="MBIDStartStage__otherDeviceButton"]'
+      ];
+      
+      this.logger.debug(`[Auth Mode] Looking for other device button with selectors: ${otherDeviceButtonSelectors.join(' OR ')}`);
+      
+      let otherDeviceButtonSelector: string | null = null;
+      let otherDeviceButtonFound = false;
+      
+      for (const selector of otherDeviceButtonSelectors) {
+        try {
+          this.logger.debug(`[Auth Mode] Trying selector: ${selector}`);
+          await this.page.waitForSelector(selector, { 
+            state: 'visible',
+            timeout: 10000 
+          });
+          this.logger.debug(`[Auth Mode] Found other device button with selector: ${selector}`);
+          otherDeviceButtonSelector = selector;
+          otherDeviceButtonFound = true;
+          break;
+        } catch (error) {
+          this.logger.debug(`[Auth Mode] Selector ${selector} did not find button: ${error}`);
+        }
+      }
+      
+      if (!otherDeviceButtonFound) {
+        // Diagnostic: List all buttons to see what's available
+        this.logger.debug("[Auth Mode] [Diagnostic] Other device button not found, listing all buttons...");
+        const allButtons = await this.page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          return buttons.map((btn, idx) => ({
+            index: idx,
+            text: btn.textContent?.trim() || '',
+            dataTestId: btn.getAttribute('data-testid') || 'none',
+            dataTestIdAlt: btn.getAttribute('data-test-id') || 'none',
+            visible: btn.offsetParent !== null
+          }));
+        });
+        this.logger.debug(`[Auth Mode] [Diagnostic] Found ${allButtons.length} buttons:`);
+        allButtons.forEach(btn => {
+          this.logger.debug(`[Auth Mode] [Diagnostic] Button ${btn.index}: text="${btn.text}", data-testid="${btn.dataTestId}", data-test-id="${btn.dataTestIdAlt}", visible=${btn.visible}`);
+        });
+        
+        const errorMsg = `Other device button not found with selectors: ${otherDeviceButtonSelectors.join(', ')}. Available buttons listed in debug logs.`;
+        this.logger.debug(`[Auth Mode] ERROR: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      if (!otherDeviceButtonSelector) {
+        throw new Error("Other device button selector is null - this should not happen");
+      }
+      
+      this.log("Clicking 'Use BankID app from another device' button...");
+      this.logger.debug(`[Auth Mode] Clicking other device button with selector: ${otherDeviceButtonSelector}`);
+      
+      try {
+        await this.page.click(otherDeviceButtonSelector, { timeout: 5000 });
+        this.logger.debug("[Auth Mode] Other device button clicked successfully");
+      } catch (error) {
+        const errorMsg = `Failed to click other device button: ${error}`;
+        this.logger.debug(`[Auth Mode] ERROR: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      // Wait a moment for QR code to appear
+      this.logger.debug("[Auth Mode] Waiting 1 second for QR code to appear after clicking other device button");
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    
-    // Click the button - fail fast if it doesn't work
-    if (!otherDeviceButtonSelector) {
-      throw new Error("Other device button selector is null - this should not happen");
-    }
-    
-    this.log("Clicking 'Use BankID app from another device' button...");
-    this.logger.debug(`Clicking button with selector: ${otherDeviceButtonSelector}`);
-    
-    try {
-      await this.page.click(otherDeviceButtonSelector, { timeout: 5000 });
-      this.logger.debug("Other device button clicked successfully");
-    } catch (error) {
-      const errorMsg = `Failed to click other device button: ${error}`;
-      this.logger.debug(`ERROR: ${errorMsg}`);
-      throw new Error(errorMsg);
-    }
-    
-    // Wait a moment for QR code to appear
-    this.logger.debug("Waiting 1 second for QR code to appear after clicking other device button");
-    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Handle QR auth with simplified monitoring method
     this.log("Setting up BankID authentication flow...");
@@ -412,14 +487,80 @@ export class AuthService {
               this.logger.debug(`[Network] Init response data keys: ${Object.keys(data).join(", ")}`);
               this.logger.debug(`[Network] Full init response: ${JSON.stringify(data, null, 2)}`);
               
+              // Log additional response fields
+              if (data.initialSleepTime !== undefined) {
+                this.logger.debug(`[Network] initialSleepTime: ${data.initialSleepTime}ms`);
+              }
+              if (data.redirectURLUsed !== undefined) {
+                this.logger.debug(`[Network] redirectURLUsed: ${data.redirectURLUsed}`);
+              }
+              if (data._links && data._links.cancel) {
+                this.logger.debug(`[Network] Cancel link: ${data._links.cancel.href}`);
+                this.logger.debug(`[Network] Cancel link methods: ${JSON.stringify(data._links.cancel.hints?.allow || [])}`);
+              }
+              
+              // Handle autoStartToken for same-device flow
+              if (data.autoStartToken) {
+                this.logger.debug(`[Network] ===== AUTO START TOKEN DETECTED IN INIT ENDPOINT =====`);
+                this.logger.debug(`[Network] autoStartToken found: ${data.autoStartToken.substring(0, 20)}...`);
+                this.logger.debug(`[Network] autoStartToken length: ${data.autoStartToken.length}`);
+                this.logger.debug(`[Network] Current authMode: ${this.authMode}`);
+                
+                if (this.authMode === "same-device") {
+                  this.log(
+                    `Found autoStartToken from init endpoint: ${data.autoStartToken.substring(
+                      0,
+                      10
+                    )}...${data.autoStartToken.substring(data.autoStartToken.length - 5)}`
+                  );
+                  
+                  if (!this.autoStartToken) {
+                    this.autoStartToken = data.autoStartToken;
+                    this.logger.debug(`[Network] Storing autoStartToken (previous: null)`);
+                    
+                    // Notify service layer
+                    this.logger.debug(`[Network] Checking serviceRef: ${this.serviceRef !== null}`);
+                    if (this.serviceRef) {
+                      this.logger.debug(`[Network] serviceRef type: ${typeof this.serviceRef}`);
+                      this.logger.debug(`[Network] setAutoStartToken type: ${typeof this.serviceRef.setAutoStartToken}`);
+                      
+                      if (typeof this.serviceRef.setAutoStartToken === "function") {
+                        this.logger.debug("[Network] Calling serviceRef.setAutoStartToken() with token");
+                        try {
+                          this.serviceRef.setAutoStartToken(data.autoStartToken);
+                          this.logger.debug("[Network] serviceRef.setAutoStartToken() called successfully");
+                        } catch (err) {
+                          this.logger.debug(`[Network] ERROR calling setAutoStartToken: ${err}`);
+                        }
+                      } else {
+                        this.logger.debug("[Network] ERROR: serviceRef.setAutoStartToken is not a function");
+                      }
+                    } else {
+                      this.logger.debug("[Network] ERROR: serviceRef is null or undefined");
+                    }
+                    
+                    // Trigger opening BankID app
+                    this.logger.debug("[Network] Triggering BankID app opening...");
+                    try {
+                      await this.openBankIdApp(data.autoStartToken);
+                      this.logger.debug("[Network] BankID app opening triggered successfully");
+                    } catch (err) {
+                      this.log(`Error opening BankID app: ${err}`);
+                      this.logger.debug(`[Network] ERROR opening BankID app: ${err}`);
+                      this.logger.debug(`[Network] Error stack: ${err instanceof Error ? err.stack : "no stack"}`);
+                    }
+                  } else {
+                    this.logger.debug("[Network] AutoStartToken already exists, skipping");
+                  }
+                } else {
+                  this.logger.debug("[Network] WARNING: autoStartToken found but authMode is not 'same-device' (authMode: ${this.authMode})");
+                }
+              }
+              
+              // Handle qrStartToken for other-device flow (existing behavior)
               if (data.qrStartToken) {
-                this.log(
-                  `Found initial QR token from init endpoint: ${data.qrStartToken.substring(
-                    0,
-                    10
-                  )}...${data.qrStartToken.substring(data.qrStartToken.length - 5)}`
-                );
-                this.logger.debug(`[Network] Initial QR token extracted: ${data.qrStartToken.substring(0, 20)}...`);
+                this.logger.debug(`[Network] ===== QR START TOKEN DETECTED IN INIT ENDPOINT =====`);
+                this.logger.debug(`[Network] qrStartToken found: ${data.qrStartToken.substring(0, 20)}...`);
                 this.logger.debug(`[Network] QR token length: ${data.qrStartToken.length}`);
                 
                 if (data._links && data._links.authenticate) {
@@ -456,6 +597,11 @@ export class AuthService {
                 }
               } else {
                 this.logger.debug("[Network] No qrStartToken found in init response");
+              }
+              
+              // Log if neither token is found
+              if (!data.autoStartToken && !data.qrStartToken) {
+                this.logger.debug("[Network] WARNING: Neither autoStartToken nor qrStartToken found in init response");
                 this.logger.debug(`[Network] Available keys in response: ${Object.keys(data).join(", ")}`);
               }
             } else {
@@ -631,6 +777,57 @@ export class AuthService {
     
     this.logger.debug("Network interception listener registered successfully");
     this.logger.debug(`[Network] Final serviceRef check: ${this.serviceRef !== null}`);
+  }
+
+  /**
+   * Open BankID mobile app using deep link with autoStartToken
+   * Uses universal link (preferred) with fallback to custom scheme
+   */
+  private async openBankIdApp(autoStartToken: string): Promise<void> {
+    this.log("Opening BankID app...");
+    this.logger.debug("[BankID App] ===== Starting BankID app opening process =====");
+    this.logger.debug(`[BankID App] autoStartToken: ${autoStartToken.substring(0, 20)}...${autoStartToken.substring(autoStartToken.length - 5)}`);
+    this.logger.debug(`[BankID App] autoStartToken length: ${autoStartToken.length}`);
+    
+    // Construct universal link (preferred for Android 6+ and iOS)
+    const universalLink = `https://app.bankid.com/?autostarttoken=${encodeURIComponent(autoStartToken)}&redirect=null`;
+    this.logger.debug(`[BankID App] Universal link constructed: https://app.bankid.com/?autostarttoken=[TOKEN]&redirect=null`);
+    this.logger.debug(`[BankID App] Attempting to open BankID app with universal link...`);
+    
+    try {
+      // Try universal link first
+      await this.page.goto(universalLink, { 
+        waitUntil: 'networkidle', 
+        timeout: 5000 
+      });
+      this.log("BankID app opening triggered via universal link");
+      this.logger.debug("[BankID App] Universal link navigation completed successfully");
+    } catch (universalLinkError) {
+      this.logger.debug(`[BankID App] Universal link failed: ${universalLinkError}`);
+      this.logger.debug(`[BankID App] Error details: ${universalLinkError instanceof Error ? universalLinkError.message : String(universalLinkError)}`);
+      
+      // Fallback to custom scheme
+      const customScheme = `bankid:///?autostarttoken=${encodeURIComponent(autoStartToken)}&redirect=null`;
+      this.logger.debug(`[BankID App] Universal link failed, trying custom scheme...`);
+      this.logger.debug(`[BankID App] Custom scheme constructed: bankid:///?autostarttoken=[TOKEN]&redirect=null`);
+      
+      try {
+        await this.page.goto(customScheme, { 
+          waitUntil: 'networkidle', 
+          timeout: 5000 
+        });
+        this.log("BankID app opening triggered via custom scheme");
+        this.logger.debug("[BankID App] Custom scheme navigation completed successfully");
+      } catch (customSchemeError) {
+        const errorMsg = `Failed to open BankID app with both universal link and custom scheme. Universal link error: ${universalLinkError instanceof Error ? universalLinkError.message : String(universalLinkError)}. Custom scheme error: ${customSchemeError instanceof Error ? customSchemeError.message : String(customSchemeError)}`;
+        this.log(`Error: ${errorMsg}`);
+        this.logger.debug(`[BankID App] ERROR: ${errorMsg}`);
+        this.logger.debug(`[BankID App] Custom scheme error stack: ${customSchemeError instanceof Error ? customSchemeError.stack : "no stack"}`);
+        throw new Error(errorMsg);
+      }
+    }
+    
+    this.logger.debug("[BankID App] ===== BankID app opening process complete =====");
   }
 
   /**
