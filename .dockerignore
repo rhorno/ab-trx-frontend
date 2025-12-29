@@ -1,4 +1,5 @@
 # Minimal exclusions - only exclude what's definitely not needed
+# Note: Docker .dockerignore works by exclusion - everything else is included by default
 node_modules/
 *.log
 .git/
