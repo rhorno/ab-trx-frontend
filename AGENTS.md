@@ -101,6 +101,9 @@ git checkout main
 - `backend/` - Express.js server with CORS
   - `api/routes/` - API route handlers (import, profiles)
   - `services/` - Service layer (configuration, bank-integration, actual-budget, shared)
+- `ab-trx-importer/` - Home Assistant addon configuration files only (no code duplication)
+  - `Dockerfile` - Builds from repository root context
+  - `config.yaml`, `build.yaml`, `run.sh` - Addon configuration
 - Root level - Documentation and project config
 
 ## Architecture

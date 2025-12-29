@@ -216,12 +216,13 @@ export class HandelsbankenApiService {
       return this.capturedAccountsResponse;
     }
 
+    let accountsApiUrl = "unknown endpoint";
     try {
       // Get the base URL from the current page to ensure we use absolute URLs
       const baseUrl = await this.page.url().split("/").slice(0, 3).join("/");
 
       // Handelsbanken accounts API endpoint with absolute URL
-      const accountsApiUrl = `${baseUrl}/rseda/rykk/bu/accounts/v1/myAccounts`;
+      accountsApiUrl = `${baseUrl}/rseda/rykk/bu/accounts/v1/myAccounts`;
 
       this.log(`Making API request to ${accountsApiUrl}`);
 
@@ -288,101 +289,34 @@ export class HandelsbankenApiService {
         }`
       );
 
-      // If we received an authentication error, try a fallback API endpoint
-      if ("status" in response && response.status === 403) {
-        this.log("Received 403 Forbidden, trying alternative API endpoint...");
-        return await this.fetchAccountsAlternative();
+      // Check for errors and provide clear error messages
+      if ("error" in response) {
+        throw new Error(
+          `Failed to fetch accounts from API endpoint ${accountsApiUrl}: ${response.error}`
+        );
+      }
+
+      if ("status" in response && !response.ok) {
+        const status = response.status;
+        const statusText = response.statusText || "Unknown error";
+        throw new Error(
+          `API request to ${accountsApiUrl} failed with status ${status} (${statusText}). ` +
+            `This may indicate an authentication issue or API endpoint change.`
+        );
       }
 
       return response as ApiResponse<ApiAccountsData>;
     } catch (error) {
-      this.log(`Error in fetchAccounts: ${error}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Alternative method to fetch accounts if the main API endpoint fails
-   */
-  private async fetchAccountsAlternative(): Promise<
-    ApiResponse<ApiAccountsData>
-  > {
-    try {
-      // Get the base URL from the current page
-      const baseUrl = await this.page.url().split("/").slice(0, 3).join("/");
-
-      // Alternative URL that's more likely to work with current session
-      const alternativeUrl = `${baseUrl}/se/api/accountsummary/accounts?sort=+accountAlias&categoryFilter=ALL_PERSONAL`;
-
-      this.log(`Trying alternative API endpoint: ${alternativeUrl}`);
-
-      // Make the request
-      const response = await this.page.evaluate(async (url: string) => {
-        try {
-          const response = await fetch(url, {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-              "X-Requested-With": "fetch",
-            },
-            credentials: "include",
-          });
-
-          // Create a detailed response object
-          const contentType = response.headers.get("content-type") || "";
-          const text = await response.text();
-
-          const responseObj = {
-            ok: response.ok,
-            status: response.status,
-            statusText: response.statusText,
-            contentType,
-            text: text.length > 1000 ? `${text.substring(0, 1000)}...` : text,
-            isJson: contentType.includes("application/json"),
-          };
-
-          // Try to parse as JSON
-          if (
-            contentType.includes("application/json") &&
-            text.trim().startsWith("{")
-          ) {
-            try {
-              const jsonData = JSON.parse(text);
-              return { ...responseObj, json: jsonData };
-            } catch (e) {
-              return {
-                ...responseObj,
-                error: `Failed to parse JSON: ${e}`,
-                isJsonParseError: true,
-              };
-            }
-          }
-
-          return responseObj;
-        } catch (error) {
-          return {
-            error: String(error),
-            url,
-          };
-        }
-      }, alternativeUrl);
-
-      // Save for debugging
-
-      this.log(
-        `Alternative API response status: ${
-          "status" in response ? response.status : "unknown"
-        }, Content-Type: ${
-          "contentType" in response ? response.contentType : "unknown"
-        }`
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.log(`Error in fetchAccounts: ${errorMessage}`);
+      throw new Error(
+        `Failed to fetch accounts from Handelsbanken API: ${errorMessage}. ` +
+          `Endpoint: ${accountsApiUrl}`
       );
-
-      return response as ApiResponse<ApiAccountsData>;
-    } catch (error) {
-      this.log(`Error in fetchAccountsAlternative: ${error}`);
-      throw error;
     }
   }
+
 
   /**
    * Fetch transactions from the API
@@ -392,6 +326,7 @@ export class HandelsbankenApiService {
     startDate: string,
     endDate: string
   ): Promise<ApiResponse<ApiTransactionsData>> {
+    let transactionsApiUrl = "unknown endpoint";
     try {
       // Prepare the API request payload based on account and date range
       const payload = {
@@ -407,7 +342,7 @@ export class HandelsbankenApiService {
       const baseUrl = await this.page.url().split("/").slice(0, 3).join("/");
 
       // Handelsbanken transactions API endpoint with absolute URL
-      const transactionsApiUrl = `${baseUrl}/bb/seip/servlet/ipko?appName=ipko&appAction=ShowAccountTransactions`;
+      transactionsApiUrl = `${baseUrl}/bb/seip/servlet/ipko?appName=ipko&appAction=ShowAccountTransactions`;
 
       this.log(`Making API request to ${transactionsApiUrl}`);
 
@@ -480,126 +415,34 @@ export class HandelsbankenApiService {
         }`
       );
 
-      // If we received an authentication error, try a fallback API endpoint
-      if (
-        ("status" in response && response.status === 403) ||
-        ("status" in response && response.status === 401)
-      ) {
-        this.log(
-          "Received authorization error, trying alternative API endpoint..."
+      // Check for errors and provide clear error messages
+      if ("error" in response) {
+        throw new Error(
+          `Failed to fetch transactions from API endpoint ${transactionsApiUrl}: ${response.error}`
         );
-        return await this.fetchTransactionsAlternative(
-          account,
-          startDate,
-          endDate
+      }
+
+      if ("status" in response && !response.ok) {
+        const status = response.status;
+        const statusText = response.statusText || "Unknown error";
+        throw new Error(
+          `API request to ${transactionsApiUrl} failed with status ${status} (${statusText}). ` +
+            `This may indicate an authentication issue or API endpoint change.`
         );
       }
 
       return response as ApiResponse<ApiTransactionsData>;
     } catch (error) {
-      this.log(`Error in fetchTransactions: ${error}`);
-      throw error;
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.log(`Error in fetchTransactions: ${errorMessage}`);
+      throw new Error(
+        `Failed to fetch transactions from Handelsbanken API: ${errorMessage}. ` +
+          `Endpoint: ${transactionsApiUrl}, Account: ${account.accountNumber}`
+      );
     }
   }
 
-  /**
-   * Alternative method to fetch transactions if the main API endpoint fails
-   */
-  private async fetchTransactionsAlternative(
-    account: HandelsbankenAccount,
-    startDate: string,
-    endDate: string
-  ): Promise<ApiResponse<ApiTransactionsData>> {
-    try {
-      // Get the base URL from the current page
-      const baseUrl = await this.page.url().split("/").slice(0, 3).join("/");
-
-      // Alternative transaction API endpoint
-      const alternativeUrl = `${baseUrl}/se/api/accountdetails/transactions`;
-
-      // Format payload for the alternative API
-      const payload = {
-        accountId: account.accountNumber,
-        fromDate: startDate,
-        toDate: endDate,
-      };
-
-      this.log(
-        `Trying alternative transactions API endpoint: ${alternativeUrl}`
-      );
-
-      // Make the request
-      const response = await this.page.evaluate(
-        async (config: { url: string; data: any }) => {
-          try {
-            const res = await fetch(config.url, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                "X-Requested-With": "fetch",
-              },
-              body: JSON.stringify(config.data),
-              credentials: "include",
-            });
-
-            // Create a detailed response object
-            const contentType = res.headers.get("content-type") || "";
-            const text = await res.text();
-
-            const responseObj = {
-              ok: res.ok,
-              status: res.status,
-              statusText: res.statusText,
-              contentType,
-              text: text.length > 1000 ? `${text.substring(0, 1000)}...` : text,
-              isJson: contentType?.includes("application/json") ?? false,
-            };
-
-            // Try to parse as JSON
-            if (
-              contentType?.includes("application/json") &&
-              text?.trim().startsWith("{")
-            ) {
-              try {
-                const jsonData = JSON.parse(text);
-                return { ...responseObj, json: jsonData };
-              } catch (e) {
-                return {
-                  ...responseObj,
-                  error: `Failed to parse JSON: ${e}`,
-                  isJsonParseError: true,
-                };
-              }
-            }
-
-            return responseObj;
-          } catch (error) {
-            return {
-              error: String(error),
-              url: config.url,
-            };
-          }
-        },
-        { url: alternativeUrl, data: payload }
-      );
-
-      // Save for debugging
-
-      this.log(
-        `Alternative transaction API response status: ${
-          "status" in response ? response.status : "unknown"
-        }, Content-Type: ${
-          "contentType" in response ? response.contentType : "unknown"
-        }`
-      );
-
-      return response as ApiResponse<ApiTransactionsData>;
-    } catch (error) {
-      this.log(`Error in fetchTransactionsAlternative: ${error}`);
-      throw error;
-    }
-  }
 
   /**
    * Save transactions to a file for future development/testing

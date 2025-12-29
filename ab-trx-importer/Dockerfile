@@ -40,7 +40,7 @@ RUN \
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files (build context is repository root)
 COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
 
@@ -48,7 +48,7 @@ COPY frontend/package*.json ./frontend/
 WORKDIR /app/backend
 RUN npm ci
 
-# Copy backend source code and TypeScript config
+# Copy backend source code and TypeScript config (build context is repository root)
 WORKDIR /app
 COPY backend/tsconfig.json ./backend/
 COPY backend/services/ ./backend/services/
@@ -62,7 +62,7 @@ RUN npm run build
 # TypeScript compiles services/ to dist/services/, keep api/ as-is (already JS)
 RUN rm -rf services && mv dist/services services && rm -rf dist
 
-# Copy frontend source code
+# Copy frontend source code (build context is repository root)
 WORKDIR /app
 COPY frontend/ ./frontend/
 
@@ -74,15 +74,15 @@ RUN npm ci && npm run build
 WORKDIR /app/backend
 RUN npx playwright install chromium
 
-# Copy backend server.js (not compiled, stays as JS)
+# Copy backend server.js (not compiled, stays as JS) (build context is repository root)
 WORKDIR /app
 COPY backend/server.js ./backend/
 
 # Create service directory for s6-overlay
 RUN mkdir -p /etc/services.d/ab-trx-importer
 
-# Copy run script as service
-COPY run.sh /etc/services.d/ab-trx-importer/run
+# Copy run script as service (from ab-trx-importer directory, build context is repository root)
+COPY ab-trx-importer/run.sh /etc/services.d/ab-trx-importer/run
 RUN chmod a+x /etc/services.d/ab-trx-importer/run
 
 # Create config directory mount point

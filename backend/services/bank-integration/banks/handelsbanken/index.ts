@@ -7,7 +7,6 @@ import { chromium, Page } from "playwright";
 import { HandelsbankenAccount, LOGIN_URL } from "./models.js";
 import { AuthService } from "./auth-service.js";
 import { HandelsbankenApiService } from "./api-service.js";
-import { PageExtractor } from "./page-extractor.js";
 import { HandelsbankenParsers } from "./parsers.js";
 import { prompt } from "./utils.js";
 
@@ -19,7 +18,6 @@ export default class HandelsbankenClient extends BankClient {
   private browser: any = null;
   private authService: AuthService | null = null;
   private apiService: HandelsbankenApiService | null = null;
-  private pageExtractor: PageExtractor | null = null;
   private serviceRef: any = null; // POC: Reference to service for QR code notifications
 
   /**
@@ -45,7 +43,6 @@ export default class HandelsbankenClient extends BankClient {
   private initServices(page: Page): void {
     this.authService = new AuthService(page, this.verbose);
     this.apiService = new HandelsbankenApiService(page, this.verbose);
-    this.pageExtractor = new PageExtractor(page, this.verbose);
 
     // POC: Pass service ref to auth service for QR code notifications
     if (this.serviceRef && this.authService.setServiceRef) {
@@ -135,7 +132,7 @@ export default class HandelsbankenClient extends BankClient {
       await page.goto(LOGIN_URL);
 
       // Ensure services are initialized
-      if (!this.authService || !this.apiService || !this.pageExtractor) {
+      if (!this.authService || !this.apiService) {
         throw new Error("Services not initialized, cannot continue");
       }
 
@@ -181,13 +178,17 @@ export default class HandelsbankenClient extends BankClient {
         const accountsResponse = await this.apiService.fetchAccounts();
         accounts = HandelsbankenParsers.parseAccounts(accountsResponse);
       } catch (error) {
-        this.log(`Error fetching accounts via API: ${error}`);
-        // Fallback to page extraction
-        accounts = await this.pageExtractor.extractAccounts();
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Failed to fetch accounts from Handelsbanken: ${errorMessage}`
+        );
       }
 
       if (accounts.length === 0) {
-        throw new Error("No accounts found.");
+        throw new Error(
+          "No accounts found. The API request succeeded but returned no accounts."
+        );
       }
 
       // Step 3: Let user select account
@@ -201,31 +202,19 @@ export default class HandelsbankenClient extends BankClient {
         `Fetching transactions for date range: ${startDate} to ${endDate}`
       );
       let transactions: Transaction[] = [];
-
       try {
         const transactionsResponse = await this.apiService.fetchTransactions(
           selectedAccount,
           startDate,
           endDate
         );
-
         transactions =
           HandelsbankenParsers.parseTransactions(transactionsResponse);
-
-        // If API returned no transactions, try page extraction as fallback
-        if (transactions.length === 0) {
-          this.log("No transactions returned from API, trying page extraction");
-          transactions = await this.pageExtractor.extractTransactions(
-            startDate,
-            endDate
-          );
-        }
       } catch (error) {
-        this.log(`Error fetching transactions via API: ${error}`);
-        // Fallback to page extraction
-        transactions = await this.pageExtractor.extractTransactions(
-          startDate,
-          endDate
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Failed to fetch transactions from Handelsbanken for account ${selectedAccount.accountNumber}: ${errorMessage}`
         );
       }
 
@@ -250,7 +239,6 @@ export default class HandelsbankenClient extends BankClient {
         this.page = null;
         this.authService = null;
         this.apiService = null;
-        this.pageExtractor = null;
       }
     }
   }

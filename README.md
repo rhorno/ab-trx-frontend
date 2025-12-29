@@ -40,7 +40,7 @@ ab-trx-importer-frontend/
 - Node.js >= 18.12.0
 - npm
 
-### Starting the Application
+### Starting the Application Locally
 
 **Terminal 1 - Backend:**
 
@@ -59,6 +59,10 @@ npm run dev
 ```
 
 Frontend runs on: http://localhost:5173
+
+### Home Assistant Addon
+
+The addon is configured in the `ab-trx-importer/` directory. The Dockerfile builds from the repository root, referencing `backend/` and `frontend/` directories directly without duplication.
 
 ### Testing
 
