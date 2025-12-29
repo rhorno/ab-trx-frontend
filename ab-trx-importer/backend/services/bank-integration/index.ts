@@ -135,12 +135,13 @@ export class BankIntegrationServiceImpl implements BankIntegrationService {
 
     // Notify callbacks with auto-start token
     // Include autoStartToken in the status for API layer to stream
-    this.notifyAuthStatus({
+    const status = {
       status: "pending",
       message: "BankID app-to-app token available",
       timestamp: new Date().toISOString(),
       autoStartToken: token, // Include autoStartToken in status
-    });
+    };
+    this.notifyAuthStatus(status);
   }
 
   /**

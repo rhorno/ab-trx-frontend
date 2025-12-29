@@ -179,14 +179,34 @@ async function handleImport(profileName, res, authMode = null) {
       // If status includes auto-start token, stream it separately
       // Frontend will use this for app-to-app deep link
       if (status.autoStartToken) {
-        res.write(
-          "data: " +
-            JSON.stringify({
-              type: "bankid-autostart",
-              data: status.autoStartToken,
-            }) +
-            "\n\n"
+        const tokenPreview =
+          status.autoStartToken.length > 15
+            ? `${status.autoStartToken.substring(
+                0,
+                10
+              )}...${status.autoStartToken.substring(
+                status.autoStartToken.length - 5
+              )}`
+            : status.autoStartToken.substring(0, 10) + "...";
+        console.log(
+          `[Import] Sending bankid-autostart token to frontend: ${tokenPreview} (length: ${status.autoStartToken.length})`
         );
+        const sseMessage =
+          "data: " +
+          JSON.stringify({
+            type: "bankid-autostart",
+            data: status.autoStartToken,
+          }) +
+          "\n\n";
+
+        try {
+          res.write(sseMessage);
+        } catch (writeError) {
+          console.error(
+            "[Import] Error writing bankid-autostart SSE message:",
+            writeError
+          );
+        }
       }
 
       res.write(

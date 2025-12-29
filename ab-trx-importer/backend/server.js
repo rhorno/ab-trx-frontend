@@ -69,6 +69,90 @@ app.get("/api/profiles", (req, res) => {
   handleListProfiles(res);
 });
 
+// Debug log endpoint for client-side logging
+// Stores logs in memory (for POC) and logs to console
+const clientLogs = [];
+const MAX_CLIENT_LOGS = 1000; // Limit memory usage
+
+app.post("/api/debug-log", (req, res) => {
+  try {
+    const logData = req.body;
+    const timestamp = new Date().toISOString();
+
+    // Add server-side timestamp
+    const enrichedLog = {
+      ...logData,
+      serverTimestamp: timestamp,
+      receivedAt: Date.now(),
+    };
+
+    // Store in memory (with limit)
+    clientLogs.push(enrichedLog);
+    if (clientLogs.length > MAX_CLIENT_LOGS) {
+      clientLogs.shift(); // Remove oldest log
+    }
+
+    // Log to console with prefix for easy filtering
+    const logLevel = logData.level || "info";
+    const logMessage = `[Client Debug] [${logLevel.toUpperCase()}] ${
+      logData.message || "No message"
+    }`;
+    const logContext = {
+      ...logData.context,
+      device: logData.device,
+      serverTimestamp: timestamp,
+    };
+
+    // Use appropriate console method based on level
+    switch (logLevel) {
+      case "error":
+        console.error(logMessage, logContext);
+        break;
+      case "warn":
+        console.warn(logMessage, logContext);
+        break;
+      case "debug":
+        console.debug(logMessage, logContext);
+        break;
+      default:
+        console.log(logMessage, logContext);
+    }
+
+    // Return success response
+    res.status(200).json({
+      success: true,
+      received: true,
+      timestamp: timestamp,
+    });
+  } catch (error) {
+    console.error("[Client Debug] Error processing debug log:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to process debug log",
+    });
+  }
+});
+
+// Optional: Endpoint to retrieve stored client logs (for debugging)
+app.get("/api/debug-logs", (req, res) => {
+  const limit = parseInt(req.query.limit) || 100;
+  const level = req.query.level; // Optional filter by level
+
+  let filteredLogs = clientLogs;
+  if (level) {
+    filteredLogs = clientLogs.filter((log) => log.level === level);
+  }
+
+  const recentLogs = filteredLogs.slice(-limit);
+
+  res.json({
+    success: true,
+    count: recentLogs.length,
+    total: clientLogs.length,
+    logs: recentLogs,
+  });
+});
+
 // SSE endpoint for streaming import (now uses services instead of CLI)
 app.get("/api/import", (req, res) => {
   const { profile, authMode } = req.query;
@@ -123,9 +207,10 @@ app.get("/api/import", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
-  const isDebugMode = process.env.DEBUG === "true" || process.env.NODE_ENV === "development";
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend server running on http://0.0.0.0:${PORT}`);
+  const isDebugMode =
+    process.env.DEBUG === "true" || process.env.NODE_ENV === "development";
   if (isDebugMode) {
     console.log("🐛 Debug mode enabled - verbose logging active");
     console.log(`   DEBUG=${process.env.DEBUG || "not set"}`);

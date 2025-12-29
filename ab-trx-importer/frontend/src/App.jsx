@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { parseOutput } from "./utils/outputParser";
 import QRCodeDisplay from "./components/QRCodeDisplay";
 import ImportStatus from "./components/ImportStatus";
+import debugLogger from "./utils/debugLogger";
 import "./App.css";
 
 function App() {
@@ -87,7 +88,6 @@ function App() {
     if (eventSource) {
       eventSource.close();
     }
-
     setLoading(true);
     loadingRef.current = true;
     setError(null);
@@ -101,39 +101,91 @@ function App() {
     if (isHandelsbankenProfile && effectiveAuthMode) {
       url += `&authMode=${encodeURIComponent(effectiveAuthMode)}`;
     }
-    console.log("Creating EventSource with URL:", url);
+    debugLogger.info("Creating EventSource connection", {
+      url,
+      profile: profileName,
+      authMode: effectiveAuthMode,
+      isHandelsbanken: isHandelsbankenProfile,
+    });
+    
     const es = new EventSource(url);
-    console.log("EventSource created:", es);
+    
+    // Handle connection open
+    es.addEventListener("open", () => {
+      debugLogger.info("EventSource connection opened", {
+        readyState: es.readyState,
+        url: es.url,
+      });
+    });
 
     // Handle connection
     es.addEventListener("message", (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        debugLogger.debug("SSE message received", {
+          type: data.type,
+          hasData: !!data.data,
+          dataLength: data.data ? String(data.data).length : 0,
+        });
 
         if (data.type === "connected") {
           // Connection established
+          debugLogger.info("SSE connection established", {
+            readyState: es.readyState,
+          });
           return;
         }
 
         if (data.type === "qr-code") {
           // Handle QR code token from backend (token string)
-          setParsedData((prev) => ({
-            ...prev,
-            qrCode: data.data, // Token string
-            // Don't set success to false when QR code appears - we're waiting for auth
-            success: prev?.success ?? null,
-          }));
+          debugLogger.info("QR code token received via SSE", {
+            token: data.data,
+            tokenLength: data.data ? String(data.data).length : 0,
+          });
+          setParsedData((prev) => {
+            const newData = {
+              ...prev,
+              qrCode: data.data, // Token string
+              // Don't set success to false when QR code appears - we're waiting for auth
+              success: prev?.success ?? null,
+            };
+            debugLogger.debug("State updated with QR code", {
+              hasQrCode: !!newData.qrCode,
+              hasAutoStartToken: !!newData.autoStartToken,
+              success: newData.success,
+            });
+            return newData;
+          });
           return;
         }
 
         if (data.type === "bankid-autostart") {
           // Handle auto-start token from backend (for app-to-app flow)
-          setParsedData((prev) => ({
-            ...prev,
-            autoStartToken: data.data, // Auto-start token string
-            // Don't set success to false when auto-start token appears - we're waiting for auth
-            success: prev?.success ?? null,
-          }));
+          debugLogger.info("BankID auto-start token received via SSE", {
+            autoStartToken: data.data,
+            tokenLength: data.data ? String(data.data).length : 0,
+            tokenPreview: data.data
+              ? `${data.data.substring(0, 10)}...${data.data.substring(data.data.length - 5)}`
+              : null,
+          });
+          setParsedData((prev) => {
+            const newData = {
+              ...prev,
+              autoStartToken: data.data, // Auto-start token string
+              // Don't set success to false when auto-start token appears - we're waiting for auth
+              success: prev?.success ?? null,
+            };
+            debugLogger.debug("State updated with autoStartToken", {
+              hasQrCode: !!newData.qrCode,
+              hasAutoStartToken: !!newData.autoStartToken,
+              autoStartTokenLength: newData.autoStartToken
+                ? newData.autoStartToken.length
+                : 0,
+              success: newData.success,
+            });
+            return newData;
+          });
           return;
         }
 
@@ -141,6 +193,10 @@ function App() {
           // Accumulate output
           accumulatedOutputRef.current += data.data;
           setOutput(accumulatedOutputRef.current);
+          debugLogger.debug(`SSE ${data.type} message`, {
+            dataLength: data.data ? String(data.data).length : 0,
+            accumulatedLength: accumulatedOutputRef.current.length,
+          });
 
           // Parse accumulated output in real-time to extract QR codes and status
           const parsed = parseOutput(accumulatedOutputRef.current);
@@ -176,6 +232,11 @@ function App() {
 
         if (data.type === "close") {
           // Process completed
+          debugLogger.info("SSE close message received", {
+            success: data.success,
+            hasOutput: !!data.output,
+            hasStderr: !!data.stderr,
+          });
           setLoading(false);
           loadingRef.current = false;
           es.close();
@@ -200,6 +261,10 @@ function App() {
 
         if (data.type === "error") {
           // Process error
+          debugLogger.error("SSE error message received", {
+            message: data.message,
+            hasOutput: !!data.output,
+          });
           setLoading(false);
           loadingRef.current = false;
           setError(data.message || "Import failed");
@@ -214,19 +279,46 @@ function App() {
           }
           setParsedData(errorParsed);
         }
+
+        // Log any other message types
+        if (
+          !["connected", "qr-code", "bankid-autostart", "stdout", "stderr", "close", "error"].includes(
+            data.type
+          )
+        ) {
+          debugLogger.debug("Unknown SSE message type received", {
+            type: data.type,
+            data: data,
+          });
+        }
       } catch (err) {
-        console.error("Error parsing SSE data:", err);
+        debugLogger.error("Error parsing SSE data", {
+          error: err.message,
+          stack: err.stack,
+          rawData: event.data,
+        });
       }
     });
 
     // Handle errors
     es.onerror = (err) => {
-      console.error("EventSource error:", err);
+      debugLogger.error("EventSource error occurred", {
+        error: err,
+        readyState: es.readyState,
+        url: es.url,
+      });
       setLoading(false);
       loadingRef.current = false;
       setError("Connection error. Please try again.");
       es.close();
     };
+
+    // Handle connection close
+    es.addEventListener("close", () => {
+      debugLogger.info("EventSource connection closed", {
+        readyState: es.readyState,
+      });
+    });
 
     setEventSource(es);
     setShowAuthModeModal(false); // Close modal when import starts
@@ -356,8 +448,8 @@ function App() {
         </div>
       )}
 
-      {/* Display QR Code if available */}
-      {parsedData?.qrCode && (
+      {/* Display QR Code if available, OR show button if autoStartToken is available */}
+      {(parsedData?.qrCode || parsedData?.autoStartToken) && (
         <QRCodeDisplay
           qrCode={parsedData.qrCode}
           autoStartToken={parsedData.autoStartToken}
