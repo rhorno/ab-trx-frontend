@@ -1,0 +1,8 @@
+# Minimal exclusions - only exclude what's definitely not needed
+node_modules/
+*.log
+.git/
+.DS_Store
+.env
+.env.local
+

@@ -6,14 +6,14 @@ Authoritative guide for automated agents working in ab-trx-importer-frontend.
 
 - [README.md](./README.md) - Project overview and setup
 - [poc-strategy.md](./poc-strategy.md) - POC implementation strategy
-- [frontend/README.md](./frontend/README.md) - Frontend-specific details
+- [ab-trx-importer/frontend/README.md](./ab-trx-importer/frontend/README.md) - Frontend-specific details
 
 ## Scope
 
 This is a monorepo containing:
 
-- `frontend/` - React + Vite application
-- `backend/` - Express.js API server with service-oriented architecture
+- `ab-trx-importer/frontend/` - React + Vite application
+- `ab-trx-importer/backend/` - Express.js API server with service-oriented architecture
   - `api/routes/` - REST API endpoints
   - `services/` - Business logic services (Configuration, Bank Integration, Actual Budget)
 
@@ -27,7 +27,7 @@ This is a monorepo containing:
 ## Pre-Change Checklist
 
 1. Verify Node.js version: `node --version` (must be >= 18.12.0)
-2. Check if dependencies are installed in both `frontend/` and `backend/`
+2. Check if dependencies are installed in both `ab-trx-importer/frontend/` and `ab-trx-importer/backend/`
 3. Ensure no breaking changes to POC scope (see `poc-strategy.md`)
 
 ## Development Commands
@@ -36,37 +36,39 @@ This is a monorepo containing:
 
 ```bash
 # Install frontend dependencies
-cd frontend && npm install
+cd ab-trx-importer/frontend && npm install
 
 # Install backend dependencies
-cd backend && npm install
+cd ab-trx-importer/backend && npm install
 ```
 
 ### Development
 
 ```bash
 # Terminal 1 - Backend (port 8000)
-cd backend && node server.js
+cd ab-trx-importer/backend && npm start
+# or for development with hot reload:
+cd ab-trx-importer/backend && npm run dev
 
 # Terminal 2 - Frontend (port 5173)
-cd frontend && npm run dev
+cd ab-trx-importer/frontend && npm run dev
 ```
 
 ### Build
 
 ```bash
 # Frontend production build
-cd frontend && npm run build
+cd ab-trx-importer/frontend && npm run build
 
 # Preview production build
-cd frontend && npm run preview
+cd ab-trx-importer/frontend && npm run preview
 ```
 
 ### Linting
 
 ```bash
 # Frontend linting
-cd frontend && npm run lint
+cd ab-trx-importer/frontend && npm run lint
 ```
 
 ### Versioning
@@ -97,8 +99,8 @@ git checkout main
 
 ## Project Structure
 
-- `frontend/` - React app using Vite, ESLint configured
-- `backend/` - Express.js server with CORS
+- `ab-trx-importer/frontend/` - React app using Vite, ESLint configured
+- `ab-trx-importer/backend/` - Express.js server with CORS
   - `api/routes/` - API route handlers (import, profiles)
   - `services/` - Service layer (configuration, bank-integration, actual-budget, shared)
 - `ab-trx-importer/` - Home Assistant addon configuration files only (no code duplication)

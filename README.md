@@ -19,19 +19,25 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed architecture documentation
 
 ```
 ab-trx-importer-frontend/
-├── frontend/                    # React app (Vite)
-├── backend/                    # Express.js API
-│   ├── api/                    # API routes
-│   │   └── routes/
-│   │       ├── import.js       # Import endpoint (SSE)
-│   │       └── profiles.js     # Profile listing endpoint
-│   └── services/               # Business logic services
-│       ├── configuration/      # Configuration service
-│       ├── bank-integration/   # Bank integration service
-│       ├── actual-budget/      # Actual Budget service
-│       └── shared/             # Shared utilities and types
+├── ab-trx-importer/             # Home Assistant addon directory (main development directory)
+│   ├── backend/                 # Express.js API
+│   │   ├── api/                  # API routes
+│   │   │   └── routes/
+│   │   │       ├── import.js     # Import endpoint (SSE)
+│   │   │       └── profiles.js   # Profile listing endpoint
+│   │   └── services/             # Business logic services
+│   │       ├── configuration/    # Configuration service
+│   │       ├── bank-integration/ # Bank integration service
+│   │       ├── actual-budget/    # Actual Budget service
+│   │       └── shared/           # Shared utilities and types
+│   ├── frontend/                 # React app (Vite)
+│   ├── Dockerfile                # Addon Dockerfile
+│   ├── config.yaml               # Addon configuration
+│   └── run.sh                    # Addon startup script
 └── README.md
 ```
+
+**Note:** All development happens directly in the `ab-trx-importer/` directory. The `backend/` and `frontend/` directories are located within the addon directory to ensure the Docker build context works correctly.
 
 ## Development Setup
 
@@ -45,8 +51,10 @@ ab-trx-importer-frontend/
 **Terminal 1 - Backend:**
 
 ```bash
-cd backend
-node server.js
+cd ab-trx-importer/backend
+npm start
+# or for development with hot reload:
+npm run dev
 ```
 
 Backend runs on: http://localhost:8000
@@ -54,7 +62,7 @@ Backend runs on: http://localhost:8000
 **Terminal 2 - Frontend:**
 
 ```bash
-cd frontend
+cd ab-trx-importer/frontend
 npm run dev
 ```
 
@@ -62,7 +70,7 @@ Frontend runs on: http://localhost:5173
 
 ### Home Assistant Addon
 
-The addon is configured in the `ab-trx-importer/` directory. The Dockerfile builds from the repository root, referencing `backend/` and `frontend/` directories directly without duplication.
+The addon is configured in the `ab-trx-importer/` directory. All development happens directly in this directory. The `backend/` and `frontend/` directories are located within the addon directory to ensure the Docker build context works correctly.
 
 ### Testing
 
@@ -77,7 +85,7 @@ For testing without real bank/Actual Budget connections:
 
 ```bash
 export USE_MOCK_SERVICES=true
-cd backend && node server.js
+cd ab-trx-importer/backend && npm start
 ```
 
 See [MIGRATION-TESTING.md](./MIGRATION-TESTING.md) for detailed testing procedures.

@@ -11,16 +11,16 @@ This directory contains the Home Assistant addon configuration files.
 
 ## Build Process
 
-The addon references `backend/` and `frontend/` directories from the repository root. During build:
+The addon contains `backend/` and `frontend/` directories within the addon directory. During build:
 
 1. Home Assistant's builder clones the repository
-2. The builder sets the build context to the repository root
-3. Dockerfile uses `backend/` and `frontend/` paths directly (no duplication needed)
-4. Docker builds the application from the root-level source directories
+2. The builder sets the build context to the addon directory (`ab-trx-importer/`)
+3. Dockerfile uses `backend/` and `frontend/` paths relative to the addon directory
+4. Docker builds the application from the addon directory
 
 ## Files
 
-- Source code (`backend/`, `frontend/`) remains at repository root (no duplication)
-- Addon config files are in this directory (`ab-trx-importer/`)
-- The Dockerfile builds from repository root context, eliminating code duplication
+- Source code (`backend/`, `frontend/`) is located in this directory (`ab-trx-importer/`)
+- Symlinks at the repository root (`../backend` and `../frontend`) allow local development to work as before
+- The Dockerfile builds from the addon directory context, ensuring all files are accessible
 
