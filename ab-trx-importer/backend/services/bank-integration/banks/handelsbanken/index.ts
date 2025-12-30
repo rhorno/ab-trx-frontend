@@ -56,6 +56,14 @@ export default class HandelsbankenClient extends BankClient {
         this.authService.setAuthMode(authMode);
       }
     }
+
+    // Pass frontendUrl to auth service if provided (for auth callback)
+    if (this.params.frontendUrl && typeof this.params.frontendUrl === "string") {
+      this.log(`Setting frontend URL for auth callback: ${this.params.frontendUrl}`);
+      this.authService.setFrontendUrl(this.params.frontendUrl);
+    } else {
+      this.log("WARNING: frontendUrl not provided - auth callback may not work on mobile devices");
+    }
   }
 
   /**

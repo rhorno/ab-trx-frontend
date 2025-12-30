@@ -20,8 +20,9 @@ const DRY_RUN =
  * @param {string} profileName - Profile name to use for import
  * @param {Object} res - Express response object (configured for SSE)
  * @param {string|null} authMode - Authentication mode: "same-device" or "other-device" (for Handelsbanken)
+ * @param {string|null} frontendUrl - Frontend URL for auth callback (e.g., http://192.168.x.x:5173)
  */
-async function handleImport(profileName, res, authMode = null) {
+async function handleImport(profileName, res, authMode = null, frontendUrl = null) {
   let configService, actualBudgetService, bankIntegrationService;
   let actualBudgetConnected = false;
   let bankInitialized = false;
@@ -148,6 +149,11 @@ async function handleImport(profileName, res, authMode = null) {
       bankParams.authMode = authMode;
     }
 
+    // Add frontendUrl to bankParams for Handelsbanken profiles (needed for auth callback)
+    if (config.bank.name === "handelsbanken" && frontendUrl) {
+      bankParams.frontendUrl = frontendUrl;
+    }
+
     await bankIntegrationService.initialize(config.bank.name, bankParams);
     bankInitialized = true;
 
@@ -189,13 +195,14 @@ async function handleImport(profileName, res, authMode = null) {
               )}`
             : status.autoStartToken.substring(0, 10) + "...";
         console.log(
-          `[Import] Sending bankid-autostart token to frontend: ${tokenPreview} (length: ${status.autoStartToken.length})`
+          `[Import] Sending bankid-autostart token to frontend: ${tokenPreview} (length: ${status.autoStartToken.length})${status.sessionId ? `, sessionId: ${status.sessionId}` : ""}`
         );
         const sseMessage =
           "data: " +
           JSON.stringify({
             type: "bankid-autostart",
             data: status.autoStartToken,
+            sessionId: status.sessionId || null,
           }) +
           "\n\n";
 

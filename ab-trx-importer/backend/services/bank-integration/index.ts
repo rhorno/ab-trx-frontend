@@ -129,17 +129,20 @@ export class BankIntegrationServiceImpl implements BankIntegrationService {
   /**
    * Set auto-start token (called internally when app-to-app token is detected)
    * POC: This is called by the bank client when autoStartToken is available
+   * @param token - The autoStartToken from BankID
+   * @param sessionId - Optional session ID for auth callback tracking
    */
-  setAutoStartToken(token: string): void {
+  setAutoStartToken(token: string, sessionId?: string | null): void {
     this.currentAutoStartToken = token;
 
     // Notify callbacks with auto-start token
-    // Include autoStartToken in the status for API layer to stream
+    // Include autoStartToken and sessionId in the status for API layer to stream
     const status = {
       status: "pending",
       message: "BankID app-to-app token available",
       timestamp: new Date().toISOString(),
       autoStartToken: token, // Include autoStartToken in status
+      sessionId: sessionId || undefined, // Include sessionId if provided
     };
     this.notifyAuthStatus(status);
   }

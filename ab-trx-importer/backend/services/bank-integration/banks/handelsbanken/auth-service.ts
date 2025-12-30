@@ -16,6 +16,8 @@ export class AuthService {
   private sessionId: string | null = null; // Session ID for manual authenticate polling
   private authenticatePollingInterval: NodeJS.Timeout | null = null; // Interval for manual polling
   private initRedirectURL: string | null = null; // Redirect URL from init response (e.g., /logon/se/priv/sv/mbidqr/#authenticate)
+  private authCallbackSessionId: string | null = null; // Session ID for auth callback tracking (generated when login starts)
+  private frontendUrl: string | null = null; // Frontend URL for auth callback (set from params or env)
 
   /**
    * POC: Set service reference for QR code notifications
@@ -29,6 +31,14 @@ export class AuthService {
    */
   setAuthMode(mode: "same-device" | "other-device" | null): void {
     this.authMode = mode;
+  }
+
+  /**
+   * Set frontend URL for auth callback (must be network-accessible for mobile devices)
+   */
+  setFrontendUrl(url: string): void {
+    this.frontendUrl = url;
+    this.logger.debug(`[Auth] Frontend URL set to: ${url}`);
   }
 
   /**
@@ -230,6 +240,11 @@ export class AuthService {
   public async login(personnummer: string): Promise<boolean> {
     this.logger.debug("=== Starting login flow ===");
     this.logger.debug(`Personnummer: ${personnummer.substring(0, 6)}******`);
+    
+    // Generate unique session ID for auth callback tracking
+    // Format: timestamp-random (e.g., 1234567890-abc123)
+    this.authCallbackSessionId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    this.logger.debug(`Generated auth callback session ID: ${this.authCallbackSessionId}`);
     
     const currentUrl = await this.page.url();
     this.logger.debug(`Current URL: ${currentUrl}`);
@@ -503,17 +518,24 @@ export class AuthService {
       return;
     }
 
-    // Also listen for requests to capture what's being sent
+    // NOTE: We cannot modify the redirectURL in the init request because Handelsbanken validates it
+    // server-side and rejects non-Handelsbanken URLs with a 400 error.
+    // Instead, we rely on the redirect parameter in the BankID universal link for redirecting after authentication.
+    // The redirectURL in the init request must remain as the original Handelsbanken URL.
+
+    // Also listen for requests to capture what's being sent (for logging)
     this.page.on("request", async (request: any) => {
       const url = request.url();
-      if (url.includes("/mluri/aa/privmbidqrwebse/init/1.0")) {
+      if (url.includes("/mluri/aa/privmbidqrwebse/init/1.0") && request.method() === "POST") {
         try {
           const postData = request.postData();
-          const headers = request.headers();
-          this.logger.debug(`[Network] Init request: ${url}`);
-          this.logger.debug(`[Network] Init request method: ${request.method()}`);
           if (postData) {
-            this.logger.debug(`[Network] Init request body: ${postData.substring(0, 500)}`);
+            try {
+              const requestBody = JSON.parse(postData);
+              this.logger.debug(`[Network] Init request redirectURL (not modified): ${requestBody.redirectURL}`);
+            } catch (parseErr) {
+              this.logger.debug(`[Network] Could not parse init request body for logging`);
+            }
           }
         } catch (err) {
           // Error capturing request - continue
@@ -607,10 +629,10 @@ export class AuthService {
                       this.logger.debug(`[Network] setAutoStartToken type: ${typeof this.serviceRef.setAutoStartToken}`);
                       
                       if (typeof this.serviceRef.setAutoStartToken === "function") {
-                        this.logger.debug("[Network] Calling serviceRef.setAutoStartToken() with token - frontend will open BankID app");
+                        this.logger.debug("[Network] Calling serviceRef.setAutoStartToken() with token and session ID - frontend will open BankID app");
                         try {
-                          this.serviceRef.setAutoStartToken(data.autoStartToken);
-                          this.logger.debug("[Network] serviceRef.setAutoStartToken() called successfully - frontend should receive token and open app");
+                          this.serviceRef.setAutoStartToken(data.autoStartToken, this.authCallbackSessionId);
+                          this.logger.debug(`[Network] serviceRef.setAutoStartToken() called successfully with sessionId: ${this.authCallbackSessionId} - frontend should receive token and open app`);
                           
                           // Start manual polling of authenticate endpoint for same-device flow
                           if (sessionId) {
@@ -870,9 +892,9 @@ export class AuthService {
                     this.serviceRef &&
                     typeof this.serviceRef.setAutoStartToken === "function"
                   ) {
-                    this.logger.debug("[Network] Notifying service layer of autoStartToken");
-                    this.serviceRef.setAutoStartToken(data.autoStartToken);
-                    this.logger.debug("[Network] Service layer notified of autoStartToken");
+                    this.logger.debug("[Network] Notifying service layer of autoStartToken with session ID");
+                    this.serviceRef.setAutoStartToken(data.autoStartToken, this.authCallbackSessionId);
+                    this.logger.debug(`[Network] Service layer notified of autoStartToken with sessionId: ${this.authCallbackSessionId}`);
                   } else {
                     this.logger.debug("[Network] WARNING: serviceRef not available for autoStartToken");
                   }
@@ -1070,6 +1092,113 @@ export class AuthService {
   }
 
   /**
+   * Navigate to Handelsbanken's authenticated page after callback completion
+   * Uses the redirect URL from the authenticate endpoint response or init request
+   */
+  private async navigateToAuthenticatedPage(redirectUrlFromResponse?: string | null): Promise<void> {
+    this.log("Navigating to Handelsbanken authenticated page...");
+    this.logger.debug("[Navigate] Starting navigation to authenticated page");
+
+    // Use the redirect URL from response, init request, or fallback
+    let redirectUrl: string | null = redirectUrlFromResponse || null;
+
+    if (!redirectUrl && this.initRedirectURL) {
+      const baseUrl = await this.page.url().split("/").slice(0, 3).join("/");
+      redirectUrl = baseUrl + this.initRedirectURL;
+      this.logger.debug(`[Navigate] Using redirect URL from init: ${redirectUrl}`);
+    } else if (!redirectUrl) {
+      // Fallback: use a default authenticated page path
+      const baseUrl = await this.page.url().split("/").slice(0, 3).join("/");
+      redirectUrl = `${baseUrl}/privat/`;
+      this.logger.debug(`[Navigate] Using fallback redirect URL: ${redirectUrl}`);
+    }
+
+    if (redirectUrl) {
+      // Make sure it's an absolute URL
+      if (redirectUrl.startsWith("/")) {
+        const baseUrl = await this.page.url().split("/").slice(0, 3).join("/");
+        redirectUrl = baseUrl + redirectUrl;
+      }
+
+      try {
+        this.log(`Navigating to: ${redirectUrl}`);
+        this.logger.debug(`[Navigate] Navigating to redirect URL: ${redirectUrl}`);
+        await this.page.goto(redirectUrl, { waitUntil: "networkidle", timeout: 30000 });
+        this.logger.debug("[Navigate] Successfully navigated to authenticated page");
+
+        // Wait a bit for the page to fully load and establish session
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        const currentUrl = await this.page.url();
+        this.logger.debug(`[Navigate] Current URL after navigation: ${currentUrl}`);
+
+        // Check if we're on an authenticated page
+        if (
+          currentUrl.includes("/privat/") ||
+          currentUrl.includes("/dashboard") ||
+          !currentUrl.includes("/mbidqr/")
+        ) {
+          this.log("Successfully navigated to authenticated page");
+          this.logger.debug("[Navigate] Appears to be on authenticated page");
+        } else {
+          this.logger.debug("[Navigate] Still on login page, may need to wait longer");
+        }
+      } catch (error) {
+        this.logger.debug(`[Navigate] Error navigating to redirect URL: ${error}`);
+        // Continue anyway - the session might still be established
+      }
+    } else {
+      this.logger.debug("[Navigate] No redirect URL available");
+    }
+  }
+
+  /**
+   * Check if auth callback completion has been received from frontend
+   * Polls the backend API to check if the session is marked as complete
+   */
+  private async checkAuthCallbackCompletion(): Promise<boolean> {
+    if (!this.authCallbackSessionId) {
+      this.logger.debug("[Auth Callback] No session ID available for callback check");
+      return false;
+    }
+
+    try {
+      // Use Node.js fetch or http module to call backend API
+      // Since we're in a Node.js environment, we can use fetch (Node 18+) or http
+      const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+      const statusUrl = `${backendUrl}/api/auth/status/${encodeURIComponent(this.authCallbackSessionId)}`;
+
+      this.logger.debug(`[Auth Callback] Checking completion status: ${statusUrl}`);
+
+      const response = await fetch(statusUrl, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        this.logger.debug(`[Auth Callback] Status check failed: ${response.status}`);
+        return false;
+      }
+
+      const data = await response.json();
+      this.logger.debug(`[Auth Callback] Status response: ${JSON.stringify(data)}`);
+
+      if (data.success && data.complete) {
+        this.log("Auth callback completion detected!");
+        this.logger.debug(`[Auth Callback] Completion confirmed at ${data.timestamp}`);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      this.logger.debug(`[Auth Callback] Error checking completion: ${error}`);
+      return false;
+    }
+  }
+
+  /**
    * Start manual polling of the authenticate endpoint for same-device flow
    * The website doesn't automatically poll in same-device mode, so we need to do it manually
    */
@@ -1111,7 +1240,7 @@ export class AuthService {
 
     this.authenticatePollingInterval = setInterval(async () => {
       pollCount++;
-      this.logger.debug(`[Manual Polling] Poll #${pollCount} - Checking authenticate endpoint`);
+      this.logger.debug(`[Manual Polling] Poll #${pollCount} - Checking authenticate endpoint and auth callback`);
       
       if (pollCount > maxPolls) {
         this.log("Manual authenticate polling timeout reached");
@@ -1121,6 +1250,24 @@ export class AuthService {
           this.authenticatePollingInterval = null;
         }
         return;
+      }
+
+      // First check if auth callback completion has been received
+      // Only check every 2 polls to reduce API calls (check callback and authenticate endpoint alternately)
+      if (pollCount % 2 === 0) {
+        const callbackComplete = await this.checkAuthCallbackCompletion();
+        if (callbackComplete) {
+          this.log("Auth callback completion detected - authentication successful!");
+          this.logger.debug("[Manual Polling] Auth callback complete, will proceed to navigate to authenticated page");
+          // Stop polling - we'll handle navigation below
+          if (this.authenticatePollingInterval) {
+            clearInterval(this.authenticatePollingInterval);
+            this.authenticatePollingInterval = null;
+          }
+          // Navigate to Handelsbanken authenticated page
+          await this.navigateToAuthenticatedPage();
+          return;
+        }
       }
 
       try {
@@ -1190,10 +1337,13 @@ export class AuthService {
               this.logger.debug(`[Manual Polling] Full response (poll #${pollCount}): ${JSON.stringify(data, null, 2)}`);
             }
 
-            // Check if this is an error response (code 101 = technical error)
-            // Error 101 typically means the session isn't ready or has expired
-            // We need to continue polling until we get a success response
-            if (data.code === "101" || data.severity === "F") {
+            // Check if this is an error response
+            // Error codes 100, 101, 102 typically mean:
+            // - Session not ready yet (expected early on - user hasn't authenticated)
+            // - User hasn't authenticated yet
+            // - Session expired (if it persists after user authenticates)
+            // We need to continue polling until we get result: "COMPLETE"
+            if (data.code === "101" || data.code === "100" || data.code === "102" || data.severity === "F") {
               this.logger.debug(`[Manual Polling] Poll #${pollCount}: Error response (code: ${data.code}, message: ${data.message})`);
               
               // Error 101 might mean:
@@ -1239,22 +1389,20 @@ export class AuthService {
               return;
             }
 
-              // Check for completion - also check for success indicators
-              // After authentication completes, the response might include:
-              // - result: "COMPLETE" or "complete"
-              // - status: "complete" or "success"
-              // - _links.redirect: redirect URL
-              // - Or the response might change from error to success
+              // Check for completion - the authenticate endpoint returns result: "COMPLETE" when authentication succeeds
+              // This happens after the user authenticates in the BankID app
+              // Note: Error codes (100, 101, 102) are expected before authentication completes
               const isComplete = 
                 data.result === "COMPLETE" || 
-                data.result === "complete" || 
-                data.status === "complete" ||
-                data.result === "SUCCESS" ||
-                data.status === "success" ||
-                (data._links && data._links.redirect) || // If there's a redirect link, auth is likely complete
-                (data.code && data.code !== "101"); // If we get a different code (not error 101), might be success
+                data.result === "complete";
               
-            if (isComplete) {
+              // Also check for redirect link - if present, authentication is likely complete
+              const hasRedirectLink = !!(data._links && data._links.redirect);
+              
+              // If we have a redirect link but no result field, assume complete
+              const isCompleteByRedirect = hasRedirectLink && !data.result && !data.code;
+              
+            if (isComplete || isCompleteByRedirect) {
               this.log("Authentication completed successfully via manual polling!");
               this.logger.debug("[Manual Polling] COMPLETE state detected");
               this.logger.debug(`[Manual Polling] Full response: ${JSON.stringify(data, null, 2)}`);
@@ -1264,6 +1412,9 @@ export class AuthService {
                 clearInterval(this.authenticatePollingInterval);
                 this.authenticatePollingInterval = null;
               }
+
+              // Navigate to authenticated page - pass redirect URL from response if available
+              await this.navigateToAuthenticatedPage(data.redirectURL || data._links?.redirect?.href);
 
               // Check for redirect URL - this is critical for completing authentication
               // After authentication completes, we need to navigate to the redirect URL to establish the session

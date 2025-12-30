@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { parseOutput } from "./utils/outputParser";
 import QRCodeDisplay from "./components/QRCodeDisplay";
 import ImportStatus from "./components/ImportStatus";
+import AuthCallback from "./components/AuthCallback";
 import debugLogger from "./utils/debugLogger";
 import "./App.css";
 
@@ -96,11 +97,14 @@ function App() {
     accumulatedOutputRef.current = "";
 
     // Create EventSource for Server-Sent Events
-    // Include authMode for Handelsbanken profiles
+    // Include authMode and frontendUrl for Handelsbanken profiles
     let url = `/api/import?profile=${encodeURIComponent(profileName.trim())}`;
     if (isHandelsbankenProfile && effectiveAuthMode) {
       url += `&authMode=${encodeURIComponent(effectiveAuthMode)}`;
     }
+    // Always include frontendUrl so backend knows where to redirect (important for mobile devices)
+    const frontendUrl = window.location.origin;
+    url += `&frontendUrl=${encodeURIComponent(frontendUrl)}`;
     debugLogger.info("Creating EventSource connection", {
       url,
       profile: profileName,
@@ -164,6 +168,7 @@ function App() {
           // Handle auto-start token from backend (for app-to-app flow)
           debugLogger.info("BankID auto-start token received via SSE", {
             autoStartToken: data.data,
+            sessionId: data.sessionId || null,
             tokenLength: data.data ? String(data.data).length : 0,
             tokenPreview: data.data
               ? `${data.data.substring(0, 10)}...${data.data.substring(data.data.length - 5)}`
@@ -173,12 +178,15 @@ function App() {
             const newData = {
               ...prev,
               autoStartToken: data.data, // Auto-start token string
+              sessionId: data.sessionId || null, // Session ID for auth callback
               // Don't set success to false when auto-start token appears - we're waiting for auth
               success: prev?.success ?? null,
             };
-            debugLogger.debug("State updated with autoStartToken", {
+            debugLogger.debug("State updated with autoStartToken and sessionId", {
               hasQrCode: !!newData.qrCode,
               hasAutoStartToken: !!newData.autoStartToken,
+              hasSessionId: !!newData.sessionId,
+              sessionId: newData.sessionId,
               autoStartTokenLength: newData.autoStartToken
                 ? newData.autoStartToken.length
                 : 0,
@@ -350,6 +358,14 @@ function App() {
     };
   }, [eventSource]);
 
+  // Check if we're on the auth callback page
+  const isAuthCallbackPage = window.location.pathname === "/auth-callback";
+
+  // If on callback page, render only the callback component
+  if (isAuthCallbackPage) {
+    return <AuthCallback />;
+  }
+
   return (
     <div className="app-container">
       {/* Profiles List */}
@@ -453,6 +469,7 @@ function App() {
         <QRCodeDisplay
           qrCode={parsedData.qrCode}
           autoStartToken={parsedData.autoStartToken}
+          sessionId={parsedData.sessionId}
         />
       )}
 

@@ -69,6 +69,10 @@ app.get("/api/profiles", (req, res) => {
   handleListProfiles(res);
 });
 
+// Auth callback session store (in-memory for POC)
+// Maps sessionId to completion status
+const authCallbackSessions = new Map();
+
 // Debug log endpoint for client-side logging
 // Stores logs in memory (for POC) and logs to console
 const clientLogs = [];
@@ -153,9 +157,91 @@ app.get("/api/debug-logs", (req, res) => {
   });
 });
 
+// Auth callback endpoint - receives completion signal from frontend
+app.post("/api/auth/callback", (req, res) => {
+  try {
+    const { sessionId, timestamp } = req.body;
+
+    if (!sessionId || typeof sessionId !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "sessionId is required",
+      });
+    }
+
+    console.log(
+      `[Auth Callback] Received completion signal for sessionId: ${sessionId}`
+    );
+
+    // Store completion status
+    authCallbackSessions.set(sessionId, {
+      complete: true,
+      timestamp: timestamp || new Date().toISOString(),
+      receivedAt: Date.now(),
+    });
+
+    // Clean up old sessions (older than 10 minutes) to prevent memory leak
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    for (const [id, session] of authCallbackSessions.entries()) {
+      if (session.receivedAt < tenMinutesAgo) {
+        authCallbackSessions.delete(id);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Authentication completion recorded",
+      sessionId,
+    });
+  } catch (error) {
+    console.error("[Auth Callback] Error processing callback:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to process auth callback",
+    });
+  }
+});
+
+// Endpoint to check auth completion status (for Playwright polling)
+app.get("/api/auth/status/:sessionId", (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        error: "sessionId is required",
+      });
+    }
+
+    const session = authCallbackSessions.get(sessionId);
+
+    if (!session) {
+      return res.json({
+        success: true,
+        complete: false,
+        message: "Session not found or not yet completed",
+      });
+    }
+
+    res.json({
+      success: true,
+      complete: session.complete,
+      timestamp: session.timestamp,
+      receivedAt: session.receivedAt,
+    });
+  } catch (error) {
+    console.error("[Auth Status] Error checking status:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to check auth status",
+    });
+  }
+});
+
 // SSE endpoint for streaming import (now uses services instead of CLI)
 app.get("/api/import", (req, res) => {
-  const { profile, authMode } = req.query;
+  const { profile, authMode, frontendUrl } = req.query;
 
   if (!profile || typeof profile !== "string" || profile.trim() === "") {
     return res.status(400).json({
@@ -180,10 +266,12 @@ app.get("/api/import", (req, res) => {
   });
 
   // Call service-based import handler
-  // Pass authMode if provided (for Handelsbanken profiles)
+  // Pass authMode and frontendUrl if provided (for Handelsbanken profiles)
   const effectiveAuthMode =
     authMode && typeof authMode === "string" ? authMode.trim() : null;
-  handleImport(profile.trim(), res, effectiveAuthMode).catch((error) => {
+  const effectiveFrontendUrl =
+    frontendUrl && typeof frontendUrl === "string" ? frontendUrl.trim() : null;
+  handleImport(profile.trim(), res, effectiveAuthMode, effectiveFrontendUrl).catch((error) => {
     // Final error handler if handleImport fails catastrophically
     if (!res.headersSent) {
       res.write(

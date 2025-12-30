@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import debugLogger from "../utils/debugLogger";
 
-function QRCodeDisplay({ qrCode, autoStartToken }) {
+function QRCodeDisplay({ qrCode, autoStartToken, sessionId }) {
   const autoOpenAttemptedRef = useRef(false);
   const previousAutoStartTokenRef = useRef(null);
   
@@ -141,19 +141,30 @@ function QRCodeDisplay({ qrCode, autoStartToken }) {
       language: navigator.language,
     });
 
+    // Construct callback URL for redirect after authentication
+    // Use current origin (works for both localhost and production)
+    const callbackUrl = sessionId
+      ? `${window.location.origin}/auth-callback?sessionId=${encodeURIComponent(sessionId)}`
+      : null;
+    
     // Construct BankID deep link
-    // Universal link (preferred for Android 6+ and iOS): https://app.bankid.com/?autostarttoken=<token>&redirect=null
-    // Custom scheme (fallback): bankid:///?autostarttoken=<token>&redirect=null
+    // Universal link (preferred for Android 6+ and iOS): https://app.bankid.com/?autostarttoken=<token>&redirect=<callback_url>
+    // Custom scheme (fallback): bankid:///?autostarttoken=<token>&redirect=<callback_url>
+    // If callbackUrl is available, use it; otherwise use null (fallback behavior)
+    const redirectParam = callbackUrl ? encodeURIComponent(callbackUrl) : "null";
+    
     const universalLink = `https://app.bankid.com/?autostarttoken=${encodeURIComponent(
       token
-    )}&redirect=null`;
+    )}&redirect=${redirectParam}`;
     const customScheme = `bankid:///?autostarttoken=${encodeURIComponent(
       token
-    )}&redirect=null`;
+    )}&redirect=${redirectParam}`;
 
     debugLogger.info("Deep link URLs constructed", {
       universalLink,
       customScheme,
+      callbackUrl,
+      sessionId: sessionId || null,
       tokenLength: token.length,
       tokenEncoded: encodeURIComponent(token),
       universalLinkLength: universalLink.length,
